@@ -1891,7 +1891,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                     <div className="mt-3 p-2 bg-orange-50 rounded text-sm">
                                         <p className="font-semibold text-orange-700">攻略者の状態:</p>
                                         <p>位置: ({playerSolvingMyMaze.position?.r || 0}, {playerSolvingMyMaze.position?.c || 0})</p>
-                                        <p>スコア: {playerSolvingMyMaze.score || 0}pt</p>
                                         {playerSolvingMyMaze.goalTime && (
                                             <p className="text-green-600 font-semibold">相手がゴール達成！</p>
                                         )}
