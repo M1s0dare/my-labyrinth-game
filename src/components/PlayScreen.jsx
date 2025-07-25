@@ -1595,20 +1595,17 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         <MazeGrid
                                             mazeData={mazeToPlayData}
                                             playerPosition={effectivePlayerState?.position}
-                                            otherPlayers={gameData?.playerStates ? 
-                                                Object.entries(gameData.playerStates)
-                                                    .filter(([pid]) => pid !== effectiveUserId)
-                                                    .map(([pid, pState]) => ({ id: pid, position: pState.position })) 
-                                                : []
-                                            }
+                                            otherPlayers={[]} // 左の迷路では相手の位置を表示しない
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
                                             onCellClick={handleCellClick}
                                             gridSize={currentGridSize}
-                                            sharedWalls={sharedWalls}
+                                            sharedWallsFromAllies={sharedWalls}
                                             highlightPlayer={true}
                                             smallView={false}
-                                            showAllPlayerPositions={gameType === 'standard'} // 2人対戦では相手位置を常に表示
+                                            showAllPlayerPositions={false} // 左の迷路では相手位置を表示しない
+                                            isCreating={false}
+                                            showAllWalls={false} // 対戦画面では発見した壁のみ表示
                                         />
                                     </div>
                                 </div>
