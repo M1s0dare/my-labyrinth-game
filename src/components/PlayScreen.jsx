@@ -1633,7 +1633,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
                                     <p className="font-semibold text-blue-700">あなたの状態:</p>
                                     <p>位置: ({effectivePlayerState?.position?.r || 0}, {effectivePlayerState?.position?.c || 0})</p>
-                                    <p>スコア: {effectivePlayerState?.score || 0}pt</p>
+                                    {/* <p>スコア: {effectivePlayerState?.score || 0}pt</p> */}
                                     {effectivePlayerState?.goalTime && (
                                         <p className="text-green-600 font-semibold">ゴール達成！</p>
                                     )}
@@ -1675,8 +1675,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         </p>
                                         <p className="text-blue-600">
                                             位置: ({effectivePlayerState?.position?.r || 0}, {effectivePlayerState?.position?.c || 0})
-                                            <br />
-                                            スコア: {effectivePlayerState?.score || 0}pt
                                         </p>
                                     </div>
                                 </div>
