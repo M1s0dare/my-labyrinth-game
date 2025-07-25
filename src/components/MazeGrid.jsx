@@ -95,7 +95,7 @@ const MazeGrid = ({
         
         // メインプレイヤーのアイコン表示
         if (highlightPlayer && playerPosition && playerPosition.r === r && playerPosition.c === c) {
-            cellPlayerIcons.push(<User key="mainPlayer" size={iconSize} className="text-white z-10" />);
+            cellPlayerIcons.push(<User key="mainPlayer" size={iconSize} className="text-white opacity-80 z-10" />);
         }
         
         // 全プレイヤー位置表示モードの場合（2人対戦モードで使用）
@@ -127,17 +127,21 @@ const MazeGrid = ({
             cellPlayerIcons.push(<Skull key="trap" size={iconSize * 0.7} className="text-red-500 opacity-60 absolute z-0" title={`Trap by ${trapOnCell.ownerId.substring(0,5)}`} />);
         }
 
-        // スタート・ゴール位置の表示（現在位置がある場合はプレイヤーアイコンを優先）
-        if (highlightPlayer && playerPosition && playerPosition.r === r && playerPosition.c === c) {
-            // 現在位置にいる場合はプレイヤーアイコンを優先表示
-            return <>{cellPlayerIcons}</>;
+        // スタート・ゴール位置の表示
+        let startGoalMarker = null;
+        if (mazeData?.start?.r === r && mazeData?.start?.c === c) {
+            startGoalMarker = <span className={`font-bold ${textSize} text-green-700 absolute bottom-0 right-0 opacity-70`}>S</span>;
         }
-        
-        // 現在位置にいない場合のみスタート・ゴールを表示
-        if (mazeData?.start?.r === r && mazeData?.start?.c === c) return <><span className={`font-bold ${textSize} text-green-700`}>S</span>{cellPlayerIcons}</>;
-        if (mazeData?.goal?.r === r && mazeData?.goal?.c === c) return <><span className={`font-bold ${textSize} text-red-700`}>G</span>{cellPlayerIcons}</>;
-        
-        return cellPlayerIcons.length > 0 ? <>{cellPlayerIcons}</> : null;
+        if (mazeData?.goal?.r === r && mazeData?.goal?.c === c) {
+            startGoalMarker = <span className={`font-bold ${textSize} text-red-700 absolute bottom-0 right-0 opacity-70`}>G</span>;
+        }
+
+        return (
+            <>
+                {cellPlayerIcons}
+                {startGoalMarker}
+            </>
+        );
     };
 
     /**
@@ -236,28 +240,28 @@ const MazeGrid = ({
 
                     // 壁の境界線スタイルを設定
                     let borderStyles = "";
-                    const wallBorderThickness = gridSize > 7 ? 'border-2' : 'border-4'; // 壁を太くして見やすく
-                    const wallBorder = smallView ? 'border-black' : `border-black ${wallBorderThickness}`;
+                    const wallBorderThickness = smallView ? 'border-2' : 'border-4'; // 外枠と同じ太さに統一
+                    const wallBorder = `border-black ${wallBorderThickness}`;
                     const pathBorder = smallView ? 'border-gray-300' : 'border-gray-300';
-                    const outerBorderThickness = gridSize > 7 ? 'border-black' : 'border-t-4 border-t-black'; // 外枠も太く
+                    const outerBorderThickness = smallView ? 'border-2' : 'border-4'; // 外枠の太さ
 
                     // 上の境界線を設定
-                    if (r === 0) borderStyles += ` border-t ${gridSize > 7 && smallView ? 'border-black' : outerBorderThickness}`;
+                    if (r === 0) borderStyles += ` border-t ${outerBorderThickness} border-t-black`;
                     else if (hasWallBetween(r,c,r-1,c)) borderStyles += ` border-t ${wallBorderThickness} border-t-black`; 
                     else borderStyles += ` border-t ${pathBorder}`;
                     
                     // 下の境界線を設定
-                    if (r === gridSize - 1) borderStyles += ` border-b ${gridSize > 7 && smallView ? 'border-black' : `border-b-4 border-b-black`}`;
+                    if (r === gridSize - 1) borderStyles += ` border-b ${outerBorderThickness} border-b-black`;
                     else if (hasWallBetween(r,c,r+1,c)) borderStyles += ` border-b ${wallBorderThickness} border-b-black`; 
                     else borderStyles += ` border-b ${pathBorder}`;
 
                     // 左の境界線を設定
-                    if (c === 0) borderStyles += ` border-l ${gridSize > 7 && smallView ? 'border-black' : `border-l-4 border-l-black`}`;
+                    if (c === 0) borderStyles += ` border-l ${outerBorderThickness} border-l-black`;
                     else if (hasWallBetween(r,c,r,c-1)) borderStyles += ` border-l ${wallBorderThickness} border-l-black`; 
                     else borderStyles += ` border-l ${pathBorder}`;
 
                     // 右の境界線を設定
-                    if (c === gridSize - 1) borderStyles += ` border-r ${gridSize > 7 && smallView ? 'border-black' : `border-r-4 border-r-black`}`;
+                    if (c === gridSize - 1) borderStyles += ` border-r ${outerBorderThickness} border-r-black`;
                     else if (hasWallBetween(r,c,r,c+1)) borderStyles += ` border-r ${wallBorderThickness} border-r-black`; 
                     else borderStyles += ` border-r ${pathBorder}`;
                     
