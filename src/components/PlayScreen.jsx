@@ -77,6 +77,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // 移動中状態管理（2秒待機機能）
     const [isMoving, setIsMoving] = useState(false);
     const [hitWalls, setHitWalls] = useState([]); // プレイヤーがぶつかった壁を記録
+    const [canPressButton, setCanPressButton] = useState(true); // 移動ボタンを押せる状態を管理
     
     // ホームに戻る確認ダイアログ
     const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
@@ -153,7 +154,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const handleStandardMove = async (direction) => {
         // デバッグモード時は現在選択中のプレイヤーで移動、通常時は自分のターンのみ
         const canMove = debugMode ? true : (isMyStandardTurn && !inStandardBattleBetting);
-        if (!canMove || isMoving) return;
+        if (!canMove || isMoving || !canPressButton) return;
+
+        // 移動ボタンを即座に無効化
+        setCanPressButton(false);
 
         // バトル敗北による行動不能チェック
         if (effectivePlayerState?.skipNextTurn) {
@@ -197,6 +201,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             case 'right': newC++; break;
             default: 
                 setIsMoving(false);
+                setCanPressButton(true); // ボタンを再度有効化
                 return;
         }
         
@@ -206,6 +211,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         if (newR < 0 || newR >= gridSize || newC < 0 || newC >= gridSize) {
             setMessage("盤外への移動はできません。");
             setIsMoving(false);
+            // 境界に阻まれた場合もボタンは無効のまま（ターン終了）
             return;
         }
         
@@ -392,9 +398,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             
             await updateDoc(gameDocRef, updates);
             
+            // 移動成功時は連続移動を許可（ゴール到達時以外）
+            if (!(mazeToPlayData && newR === mazeToPlayData.goal.r && newC === mazeToPlayData.goal.c)) {
+                setCanPressButton(true);
+            }
+            
         } catch (error) {
             console.error("Error moving:", error);
             setMessage("移動に失敗しました。");
+            setCanPressButton(true); // エラー時もボタンを再度有効化
         } finally {
             setIsMoving(false);
         }
@@ -557,7 +569,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             }
         } else if (gameType === 'standard') {
             // スタンダードモード時の移動処理
-            const canMove = debugMode ? true : (isMyStandardTurn && !inStandardBattleBetting);
+            const canMove = debugMode ? true : (isMyStandardTurn && !inStandardBattleBetting && canPressButton);
             if (canMove) {
                 const { r: currentR, c: currentC } = effectivePlayerState.position;
                 const isAdjacent = (Math.abs(r - currentR) === 1 && c === currentC) || 
@@ -578,7 +590,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // キーボード操作の追加
     useEffect(() => {
         const handleKeyPress = (event) => {
-            if (gameType === 'standard' && isMyStandardTurn && !inStandardBattleBetting) {
+            if (gameType === 'standard' && isMyStandardTurn && !inStandardBattleBetting && canPressButton) {
                 switch(event.key) {
                     case 'ArrowUp': 
                     case 'w': 
@@ -610,7 +622,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [gameType, isMyStandardTurn, inStandardBattleBetting, handleStandardMove]);
+    }, [gameType, isMyStandardTurn, inStandardBattleBetting, handleStandardMove, canPressButton]);
+
+    // ターン変更時に移動ボタンの押せる状態をリセット
+    useEffect(() => {
+        if (isMyStandardTurn) {
+            setCanPressButton(true);
+        }
+    }, [isMyStandardTurn]);
 
     // ゲームデータを読み込む useEffect を修正
     useEffect(() => {
@@ -1103,7 +1122,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
     // 不足している関数の実装
     const handleStandardMoveImproved = async (direction) => {
-        if (!isMyStandardTurn || inStandardBattleBetting) return;
+        if (!isMyStandardTurn || inStandardBattleBetting || !canPressButton) return;
         
         const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
         const { r: currentR, c: currentC } = myPlayerState.position;
@@ -1735,7 +1754,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         <div></div>
                                         <button 
                                             onClick={() => handleStandardMove('up')}
-                                            disabled={isMoving}
+                                            disabled={isMoving || !canPressButton}
                                             className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-2 sm:p-3 rounded-lg flex items-center justify-center transition-colors shadow-md"
                                             title="上に移動 (W キー)"
                                         >
@@ -1745,7 +1764,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         
                                         <button 
                                             onClick={() => handleStandardMove('left')}
-                                            disabled={isMoving}
+                                            disabled={isMoving || !canPressButton}
                                             className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-2 sm:p-3 rounded-lg flex items-center justify-center transition-colors shadow-md"
                                             title="左に移動 (A キー)"
                                         >
@@ -1756,7 +1775,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         </div>
                                         <button 
                                             onClick={() => handleStandardMove('right')}
-                                            disabled={isMoving}
+                                            disabled={isMoving || !canPressButton}
                                             className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-2 sm:p-3 rounded-lg flex items-center justify-center transition-colors shadow-md"
                                             title="右に移動 (D キー)"
                                         >
@@ -1766,7 +1785,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         <div></div>
                                         <button 
                                             onClick={() => handleStandardMove('down')}
-                                            disabled={isMoving}
+                                            disabled={isMoving || !canPressButton}
                                             className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white p-2 sm:p-3 rounded-lg flex items-center justify-center transition-colors shadow-md"
                                             title="下に移動 (S キー)"
                                         >
