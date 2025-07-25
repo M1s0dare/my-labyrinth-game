@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove,
-    orderBy, limit, runTransaction, Timestamp, increment, collection, addDoc, query, onSnapshot
+    orderBy, limit, runTransaction, Timestamp, increment, collection, addDoc, query, onSnapshot, deleteField
 } from 'firebase/firestore';
 import {
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Eye, EyeOff, MessageSquare, Send, Users, User,
@@ -514,27 +514,59 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             // プレイヤー名を取得（保存されたユーザー名を使用）
             const playerName = currentUserName;
             
-            // ゲームを終了状態に設定し、解散理由を記録
-            await updateDoc(gameDocRef, {
-                status: 'disbanded',
-                disbandReason: `${playerName}が退出したため`,
-                disbandedAt: serverTimestamp(),
-                disbandedBy: userId
-            });
+            console.log("🔥 [GameExit] Starting comprehensive cleanup for user:", userId);
             
-            // チャットに解散メッセージを送信
-            await sendSystemChatMessage(`${playerName}が抜けたのでこのゲームは解散です。`);
+            // 1. ゲームデータからプレイヤー情報を削除
+            const gameSnap = await getDoc(gameDocRef);
+            if (gameSnap.exists()) {
+                const currentGameData = gameSnap.data();
+                const remainingPlayers = (currentGameData.players || []).filter(pid => pid !== userId);
+                
+                // プレイヤー状態を削除
+                const updates = {
+                    [`playerStates.${userId}`]: deleteField(),
+                    players: remainingPlayers
+                };
+                
+                // 残りプレイヤーが0人または1人の場合はゲームを解散
+                if (remainingPlayers.length <= 1) {
+                    updates.status = 'disbanded';
+                    updates.disbandReason = `${playerName}が退出したため`;
+                    updates.disbandedAt = serverTimestamp();
+                    updates.disbandedBy = userId;
+                    
+                    // チャットに解散メッセージを送信
+                    await sendSystemChatMessage(`${playerName}が抜けたのでこのゲームは解散です。`);
+                } else {
+                    // 残りプレイヤーがいる場合は退出メッセージのみ
+                    await sendSystemChatMessage(`${playerName}がゲームから退出しました。`);
+                    
+                    // 現在のターンプレイヤーが退出した場合、次のプレイヤーにターンを移す
+                    if (currentGameData.currentTurnPlayerId === userId && remainingPlayers.length > 0) {
+                        const currentIndex = currentGameData.players.indexOf(userId);
+                        const nextIndex = currentIndex < remainingPlayers.length ? currentIndex : 0;
+                        updates.currentTurnPlayerId = remainingPlayers[nextIndex];
+                    }
+                }
+                
+                await updateDoc(gameDocRef, updates);
+                console.log("✅ [GameExit] Game data updated, player removed");
+            }
             
-            // ローカルストレージをクリア
+            // 2. ローカルストレージをクリア
             localStorage.removeItem('labyrinthGameId');
             localStorage.removeItem('labyrinthGameType');
+            localStorage.removeItem('currentUserName'); // ユーザー名もクリア
+            localStorage.removeItem('userId'); // ユーザーIDもクリア
             
-            // ロビーに戻る
+            console.log("✅ [GameExit] Local storage cleared");
+            
+            // 3. ロビーに戻る
             setScreen('lobby');
             
         } catch (error) {
-            console.error("Error disbanding game:", error);
-            setMessage("ゲーム解散処理に失敗しました。");
+            console.error("❌ [GameExit] Error during game exit:", error);
+            setMessage("ゲーム退出処理に失敗しました。");
         }
     };
 

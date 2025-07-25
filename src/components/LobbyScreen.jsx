@@ -80,6 +80,11 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
     const handleModeSelect = async (mode, gameType = "standard") => {
         console.log("🎯 [DEBUG] Mode selected:", { mode, gameType, userId, debugMode });
         
+        // 新しいゲームを開始する前に、古いゲーム情報をクリア
+        console.log("🧹 [Cleanup] Clearing old game data from localStorage");
+        localStorage.removeItem('labyrinthGameId');
+        localStorage.removeItem('labyrinthGameType');
+        
         // ユーザーネームのチェック
         if (!username || !isValidUsername(username)) {
             setShowUsernameInput(true);
