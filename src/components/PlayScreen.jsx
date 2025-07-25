@@ -1887,15 +1887,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         />
                                     </div>
                                 </div>
-                                {playerSolvingMyMaze && (
-                                    <div className="mt-3 p-2 bg-orange-50 rounded text-sm">
-                                        <p className="font-semibold text-orange-700">攻略者の状態:</p>
-                                        <p>位置: ({playerSolvingMyMaze.position?.r || 0}, {playerSolvingMyMaze.position?.c || 0})</p>
-                                        {playerSolvingMyMaze.goalTime && (
-                                            <p className="text-green-600 font-semibold">相手がゴール達成！</p>
-                                        )}
-                                    </div>
-                                )}
                             </div>
                         ) : (
                             <div className="flex items-center justify-center h-48 sm:h-64 bg-gray-50 rounded">
@@ -2116,9 +2107,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         獲得ポイント: +{resultData.points}pt
                                     </p>
                                 )}
-                                <p className="text-lg text-gray-700">
-                                    合計スコア: {resultData.totalScore}pt
-                                </p>
                                 <p className="text-sm text-gray-500">
                                     ゴール時刻: {resultData.goalTime.toLocaleTimeString()}
                                 </p>
