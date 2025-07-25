@@ -73,7 +73,21 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
 
     // チャットメッセージ送信
     const handleSendChatMessage = async () => {
-        if (!chatInput.trim() || !gameId) return;
+        if (!chatInput.trim() || !gameId) {
+            console.log("🔍 [ReviewMode Chat] Cannot send message:", {
+                chatInput: chatInput,
+                gameId: gameId,
+                isEmpty: !chatInput.trim()
+            });
+            return;
+        }
+        
+        console.log("🔍 [ReviewMode Chat] Sending message:", {
+            chatInput: chatInput,
+            gameId: gameId,
+            userId: userId,
+            currentUserName: currentUserName
+        });
         
         const chatCollRef = collection(db, `artifacts/${appId}/public/data/labyrinthGames/${gameId}/chatMessages`);
         
@@ -84,9 +98,10 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                 text: chatInput,
                 timestamp: serverTimestamp()
             });
+            console.log("✅ [ReviewMode Chat] Message sent successfully");
             setChatInput("");
         } catch (error) {
-            console.error("Error sending review chat message:", error);
+            console.error("❌ [ReviewMode Chat] Error sending review chat message:", error);
         }
     };
     
@@ -333,7 +348,12 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                 type="text"
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSendChatMessage()}
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSendChatMessage();
+                                    }
+                                }}
                                 placeholder="感想を入力..."
                                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
