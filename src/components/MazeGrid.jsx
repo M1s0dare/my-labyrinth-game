@@ -127,7 +127,13 @@ const MazeGrid = ({
             cellPlayerIcons.push(<Skull key="trap" size={iconSize * 0.7} className="text-red-500 opacity-60 absolute z-0" title={`Trap by ${trapOnCell.ownerId.substring(0,5)}`} />);
         }
 
-        // スタート・ゴール位置の表示
+        // スタート・ゴール位置の表示（現在位置がある場合はプレイヤーアイコンを優先）
+        if (highlightPlayer && playerPosition && playerPosition.r === r && playerPosition.c === c) {
+            // 現在位置にいる場合はプレイヤーアイコンを優先表示
+            return <>{cellPlayerIcons}</>;
+        }
+        
+        // 現在位置にいない場合のみスタート・ゴールを表示
         if (mazeData?.start?.r === r && mazeData?.start?.c === c) return <><span className={`font-bold ${textSize} text-green-700`}>S</span>{cellPlayerIcons}</>;
         if (mazeData?.goal?.r === r && mazeData?.goal?.c === c) return <><span className={`font-bold ${textSize} text-red-700`}>G</span>{cellPlayerIcons}</>;
         
@@ -185,7 +191,7 @@ const MazeGrid = ({
 
     // メインの迷路グリッドをレンダリング
     return (
-        <div className={`grid grid-cols-1 gap-0 ${smallView ? 'border' : 'border-2'} border-black bg-gray-50 rounded-md shadow-lg`} style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`}}>
+        <div className={`grid grid-cols-1 gap-0 ${smallView ? 'border-2' : 'border-4'} border-black bg-gray-50 rounded-md shadow-lg`} style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`}}>
             {/* グリッドの各行・各列をループで生成 */}
             {Array(gridSize).fill(0).map((_, r) =>
                 Array(gridSize).fill(0).map((_, c) => {
@@ -230,10 +236,10 @@ const MazeGrid = ({
 
                     // 壁の境界線スタイルを設定
                     let borderStyles = "";
-                    const wallBorderThickness = gridSize > 7 ? 'border' : 'border-2';
+                    const wallBorderThickness = gridSize > 7 ? 'border-2' : 'border-4'; // 壁を太くして見やすく
                     const wallBorder = smallView ? 'border-black' : `border-black ${wallBorderThickness}`;
                     const pathBorder = smallView ? 'border-gray-300' : 'border-gray-300';
-                    const outerBorderThickness = gridSize > 7 ? 'border-black' : 'border-t-2 border-t-black';
+                    const outerBorderThickness = gridSize > 7 ? 'border-black' : 'border-t-4 border-t-black'; // 外枠も太く
 
                     // 上の境界線を設定
                     if (r === 0) borderStyles += ` border-t ${gridSize > 7 && smallView ? 'border-black' : outerBorderThickness}`;
@@ -241,17 +247,17 @@ const MazeGrid = ({
                     else borderStyles += ` border-t ${pathBorder}`;
                     
                     // 下の境界線を設定
-                    if (r === gridSize - 1) borderStyles += ` border-b ${gridSize > 7 && smallView ? 'border-black' : `border-b-2 border-b-black`}`;
+                    if (r === gridSize - 1) borderStyles += ` border-b ${gridSize > 7 && smallView ? 'border-black' : `border-b-4 border-b-black`}`;
                     else if (hasWallBetween(r,c,r+1,c)) borderStyles += ` border-b ${wallBorderThickness} border-b-black`; 
                     else borderStyles += ` border-b ${pathBorder}`;
 
                     // 左の境界線を設定
-                    if (c === 0) borderStyles += ` border-l ${gridSize > 7 && smallView ? 'border-black' : `border-l-2 border-l-black`}`;
+                    if (c === 0) borderStyles += ` border-l ${gridSize > 7 && smallView ? 'border-black' : `border-l-4 border-l-black`}`;
                     else if (hasWallBetween(r,c,r,c-1)) borderStyles += ` border-l ${wallBorderThickness} border-l-black`; 
                     else borderStyles += ` border-l ${pathBorder}`;
 
                     // 右の境界線を設定
-                    if (c === gridSize - 1) borderStyles += ` border-r ${gridSize > 7 && smallView ? 'border-black' : `border-r-2 border-r-black`}`;
+                    if (c === gridSize - 1) borderStyles += ` border-r ${gridSize > 7 && smallView ? 'border-black' : `border-r-4 border-r-black`}`;
                     else if (hasWallBetween(r,c,r,c+1)) borderStyles += ` border-r ${wallBorderThickness} border-r-black`; 
                     else borderStyles += ` border-r ${pathBorder}`;
                     
