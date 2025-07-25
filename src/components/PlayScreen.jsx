@@ -1157,7 +1157,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             
             // 新しいセルの発見ボーナス
             if (!myPlayerState.revealedCells[`${newR}-${newC}`]) {
-                if(gamePlayerType==='4Player'){
+                if(gameData.mode==='4Player'){
                 updates[`playerStates.${userId}.score`] = increment(1);
                 updates[`playerStates.${userId}.revealedCells.${newR}-${newC}`] = true;
                 setMessage(`(${newR},${newC})に移動！ +1pt`);
