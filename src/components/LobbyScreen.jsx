@@ -151,9 +151,23 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
         if (!gameIdToJoin) {
             console.log("🆕 [DEBUG] Creating new game");
             try {
-                // デバッグモードの場合、4人分のプレイヤーIDを事前に設定
-                const playersArray = debugMode && (mode === '4player') ? generateDebugPlayerIds() : [userId];
-                const gameStatus = debugMode && (mode === '4player') ? "creating" : "waiting";
+                // デバッグモードの場合、必要な人数分のプレイヤーIDを事前に設定
+                let playersArray, gameStatus;
+                if (debugMode) {
+                    if (mode === '4player') {
+                        playersArray = generateDebugPlayerIds();
+                        gameStatus = "creating";
+                    } else if (mode === '2player') {
+                        playersArray = [userId, `debug_player_2_${Date.now()}`];
+                        gameStatus = "creating";
+                    } else {
+                        playersArray = [userId];
+                        gameStatus = "waiting";
+                    }
+                } else {
+                    playersArray = [userId];
+                    gameStatus = "waiting";
+                }
                 
                 const newGameData = {
                     mode: mode,

@@ -8,6 +8,7 @@ import ChatSection from './ChatSection';
 import MovementControls from './MovementControls';
 import PlayerMazeView from './PlayerMazeView';
 import PlayerInfo from './PlayerInfo';
+import DebugControls from './DebugControls';
 
 const StandardModeLayout = ({
     // 迷路データ
@@ -38,10 +39,20 @@ const StandardModeLayout = ({
     
     // 他プレイヤー迷路表示
     selectedViewPlayerId,
-    setSelectedViewPlayerId
+    setSelectedViewPlayerId,
+    
+    // デバッグ関連
+    debugMode = false,
+    debugCurrentPlayerId,
+    setDebugCurrentPlayerId,
+    showOpponentWallsDebug,
+    setShowOpponentWallsDebug,
+    debugPlayerStates,
+    userId
 }) => {
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[600px]">
+        <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[600px]">
             {/* 左側：自分が攻略する迷路 + 自分の情報 */}
             <div className="bg-white rounded-lg shadow-md p-4">
                 <h2 className="text-lg font-semibold mb-4 text-center">
@@ -117,8 +128,26 @@ const StandardModeLayout = ({
                 selectedViewPlayerId={selectedViewPlayerId}
                 setSelectedViewPlayerId={setSelectedViewPlayerId}
                 currentGridSize={currentGridSize}
+                debugMode={debugMode}
+                showOpponentWallsDebug={showOpponentWallsDebug}
+                setShowOpponentWallsDebug={setShowOpponentWallsDebug}
             />
         </div>
+        
+        {/* デバッグコントロール */}
+        {debugMode && (
+            <DebugControls
+                debugMode={debugMode}
+                gameData={gameData}
+                debugCurrentPlayerId={debugCurrentPlayerId}
+                setDebugCurrentPlayerId={setDebugCurrentPlayerId}
+                showOpponentWallsDebug={showOpponentWallsDebug}
+                setShowOpponentWallsDebug={setShowOpponentWallsDebug}
+                debugPlayerStates={debugPlayerStates}
+                userId={userId}
+            />
+        )}
+        </>
     );
 };
 

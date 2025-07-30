@@ -19,6 +19,7 @@ import { HelpOverlay } from './HelpOverlay';
 import ReviewModeScreen from './ReviewModeScreen';
 import ChatSection from './ChatSection';
 import SpeechTemplateModal from './SpeechTemplateModal';
+import DebugControls from './DebugControls';
 import {
     STANDARD_GRID_SIZE, EXTRA_GRID_SIZE, NEGOTIATION_TYPES, SABOTAGE_TYPES,
     DECLARATION_PHASE_DURATION, CHAT_PHASE_DURATION, RESULT_PUBLICATION_DURATION, ACTION_EXECUTION_DELAY,
@@ -1658,7 +1659,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             smallView={false}
                                             showAllPlayerPositions={false} // 左の迷路では相手位置を表示しない
                                             isCreating={false}
-                                            showAllWalls={false} // 対戦画面では発見した壁のみ表示
+                                            showAllWalls={debugMode && showOpponentWallsDebug} // デバッグモード時の壁表示
                                         />
                                     </div>
                                 </div>
@@ -2193,6 +2194,20 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         </div>
                     </div>
                 </div>
+            )}
+            
+            {/* デバッグコントロール */}
+            {debugMode && (
+                <DebugControls
+                    debugMode={debugMode}
+                    gameData={gameData}
+                    debugCurrentPlayerId={debugCurrentPlayerId}
+                    setDebugCurrentPlayerId={setDebugCurrentPlayerId}
+                    showOpponentWallsDebug={showOpponentWallsDebug}
+                    setShowOpponentWallsDebug={setShowOpponentWallsDebug}
+                    debugPlayerStates={debugPlayerStates}
+                    userId={userId}
+                />
             )}
         </div>
     );

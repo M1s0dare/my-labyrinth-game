@@ -146,7 +146,7 @@ function App() {
             const debugParam = urlParams.get('debug');
             if (debugParam === 'true' || debugParam === '1') {
                 setDebugMode(true);
-                console.log("🔧 [DEBUG MODE] Enabled for 4-player testing");
+                console.log("🔧 [DEBUG MODE] Enabled for 2-player and 4-player testing");
             }
             
             // ローカルストレージに保存されたゲームIDを取得

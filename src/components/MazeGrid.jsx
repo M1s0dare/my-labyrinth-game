@@ -195,7 +195,7 @@ const MazeGrid = ({
 
     // メインの迷路グリッドをレンダリング
     return (
-        <div className={`grid grid-cols-1 gap-0 ${smallView ? 'border-2' : 'border-4'} border-black bg-gray-50 rounded-md shadow-lg`} style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`}}>
+        <div className={`grid grid-cols-1 gap-0 ${smallView ? 'border-2' : 'border-8'} border-black bg-gray-50 rounded-md shadow-lg`} style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`}}>
             {/* グリッドの各行・各列をループで生成 */}
             {Array(gridSize).fill(0).map((_, r) =>
                 Array(gridSize).fill(0).map((_, c) => {
@@ -240,10 +240,10 @@ const MazeGrid = ({
 
                     // 壁の境界線スタイルを設定
                     let borderStyles = "";
-                    const wallBorderThickness = smallView ? 'border-2' : 'border-4'; // 外枠と同じ太さに統一
+                    const wallBorderThickness = smallView ? 'border-2' : 'border-8'; // 壁を太くした
                     const wallBorder = `border-black ${wallBorderThickness}`;
                     const pathBorder = smallView ? 'border-gray-300' : 'border-gray-300';
-                    const outerBorderThickness = smallView ? 'border-2' : 'border-4'; // 外枠の太さ
+                    const outerBorderThickness = smallView ? 'border-2' : 'border-8'; // 外枠も太くした
 
                     // 上の境界線を設定
                     if (r === 0) borderStyles += ` border-t ${outerBorderThickness} border-t-black`;
