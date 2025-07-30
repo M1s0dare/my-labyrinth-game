@@ -1601,7 +1601,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         return (
             <ReviewModeScreen
                 gameData={gameData}
+                mazeData={mazeToPlayData}
+                allMazeData={gameData?.mazes || {}}
                 userId={userId}
+                gameId={gameId}
                 onExit={() => {
                     setShowReviewMode(false);
                     setScreen('lobby');

@@ -255,9 +255,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         return (
             <ReviewModeScreen
                 gameData={gameData}
+                mazeData={mazeToPlayData}
+                allMazeData={gameData?.mazes || {}}
                 userId={userId}
-                onClose={() => setShowReviewMode(false)}
-                gameType={gameType}
+                gameId={gameId}
+                onExit={() => setShowReviewMode(false)}
             />
         );
     }

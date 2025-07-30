@@ -40,11 +40,23 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
         console.log("🔍 [ReviewMode Debug] selectedMazeOwner:", selectedMazeOwner);
         console.log("🔍 [ReviewMode Debug] mazeData:", mazeData);
         
-        const maze = allMazeData[selectedMazeOwner] || mazeData;
+        // 最初にallMazeDataから取得を試行
+        let maze = allMazeData[selectedMazeOwner];
+        
+        // 見つからない場合は、mazeDataを使用（自分が攻略した迷路の場合）
+        if (!maze && mazeData) {
+            maze = mazeData;
+        }
+        
+        // それでも見つからない場合は、gameDataから直接取得を試行
+        if (!maze && gameData?.mazes) {
+            maze = gameData.mazes[selectedMazeOwner];
+        }
+        
         console.log("🔍 [ReviewMode Debug] currentDisplayMaze:", maze);
         
         return maze;
-    }, [allMazeData, selectedMazeOwner, mazeData]);
+    }, [allMazeData, selectedMazeOwner, mazeData, gameData?.mazes]);
     
     // チャットの自動スクロール
     useEffect(() => {
@@ -55,7 +67,10 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
 
     // チャットメッセージの読み込み
     useEffect(() => {
-        if (!gameId) return;
+        if (!gameId) {
+            console.log("🔍 [ReviewMode] gameId is not available, chat function will be limited");
+            return;
+        }
         
         const chatCollRef = collection(db, `artifacts/${appId}/public/data/labyrinthGames/${gameId}/chatMessages`);
         const chatQuery = query(chatCollRef, orderBy('timestamp', 'asc'), limit(100));
@@ -66,6 +81,8 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                 ...doc.data()
             }));
             setChatMessages(messages);
+        }, (error) => {
+            console.error("❌ [ReviewMode] Error loading chat messages:", error);
         });
         
         return () => unsubscribe();
@@ -102,6 +119,8 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
             setChatInput("");
         } catch (error) {
             console.error("❌ [ReviewMode Chat] Error sending review chat message:", error);
+            // ユーザーにエラーを通知（オプション）
+            alert("メッセージの送信に失敗しました。もう一度お試しください。");
         }
     };
     
@@ -235,10 +254,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                     </div>
                                     
                                     <MazeGrid
-                                        mazeData={{
-                                            ...currentDisplayMaze,
-                                            walls: (currentDisplayMaze.walls || []).filter(wall => wall.active === true) // activeな壁のみ表示
-                                        }}
+                                        mazeData={currentDisplayMaze}
                                         playerPosition={currentPlayerState?.position}
                                         otherPlayers={players.filter(p => p !== userId).map(p => ({
                                             id: p,
@@ -246,13 +262,13 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             name: p === userId ? currentUserName : `プレイヤー${players.indexOf(p) + 1}`
                                         }))}
                                         revealedCells={currentPlayerState?.revealedCells || {}}
-                                        revealedPlayerWalls={(currentDisplayMaze.walls || []).filter(wall => wall.active === true)} // activeな壁のみ表示
+                                        revealedPlayerWalls={(currentDisplayMaze?.walls || []).filter(wall => wall.active === true)}
                                         onCellClick={() => {}}
-                                        gridSize={currentDisplayMaze.gridSize || 6}
-                                        sharedWalls={[]}
+                                        gridSize={currentDisplayMaze?.gridSize || 6}
+                                        sharedWallsFromAllies={[]}
                                         highlightPlayer={true}
                                         smallView={false}
-                                        showAllWalls={true} // 全ての壁を表示するフラグ
+                                        showAllWalls={true}
                                     />
                                 </div>
                                 
@@ -272,12 +288,17 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                         ) : (
                             <div className="text-center py-8 text-gray-500">
                                 <Map size={48} className="mx-auto mb-4 opacity-50"/>
-                                <p>迷路データが見つかりません</p>
-                                <p className="text-sm mt-2">
-                                    デバッグ情報: 
-                                    currentDisplayMaze={currentDisplayMaze ? '存在' : 'null'}, 
-                                    walls={currentDisplayMaze?.walls ? `${currentDisplayMaze.walls.length}個` : 'null'}
-                                </p>
+                                <p className="mb-2">選択された迷路データが見つかりません</p>
+                                <p className="text-sm">別の迷路を選択してください</p>
+                                {process.env.NODE_ENV === 'development' && (
+                                    <div className="text-xs mt-4 p-2 bg-yellow-50 rounded">
+                                        <p>デバッグ情報:</p>
+                                        <p>selectedMazeOwner: {selectedMazeOwner}</p>
+                                        <p>currentDisplayMaze: {currentDisplayMaze ? '存在' : 'null'}</p>
+                                        <p>walls: {currentDisplayMaze?.walls ? `${currentDisplayMaze.walls.length}個` : 'null'}</p>
+                                        <p>allMazeData keys: {Object.keys(allMazeData).join(', ') || 'none'}</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                         
@@ -354,12 +375,13 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                         handleSendChatMessage();
                                     }
                                 }}
-                                placeholder="感想を入力..."
+                                placeholder={gameId ? "感想を入力..." : "チャット機能は利用できません（ゲームID不明）"}
                                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={!gameId}
                             />
                             <button
                                 onClick={handleSendChatMessage}
-                                disabled={!chatInput.trim()}
+                                disabled={!chatInput.trim() || !gameId}
                                 className="bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                             >
                                 <Send size={16}/>
