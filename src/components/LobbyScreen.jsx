@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, serverTimestamp, arrayUnion, Timestamp } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, getDoc, serverTimestamp, arrayUnion, Timestamp } from 'firebase/firestore';
 import { User, Users, Info, HelpCircle, MessageSquare } from 'lucide-react';
 import { db, appId } from '../firebase';
 import { EXTRA_MODE_TOTAL_TIME_LIMIT, SECRET_OBJECTIVES } from '../constants';
