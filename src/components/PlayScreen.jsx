@@ -391,12 +391,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
             // バトル発生処理
             if (battleOpponent && gameData?.mode === '4player') {
-                // バトル状態を設定
-                updates[`playerStates.${effectiveUserId}.inBattleWith`] = battleOpponent;
-                updates[`playerStates.${battleOpponent}.inBattleWith`] = effectiveUserId;
+                // バトル状態を設定（新しい構造）
                 updates.activeBattle = {
-                    player1: effectiveUserId,
-                    player2: battleOpponent,
+                    participants: [effectiveUserId, battleOpponent],
                     startTime: serverTimestamp(),
                     status: 'betting'
                 };
@@ -406,7 +403,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 const opponentName = getUserNameById(battleOpponent);
                 sendSystemChatMessage(`${myName}と${opponentName}でバトルが発生しました！`);
                 
-                // バトルモーダルを開く
+                // バトルモーダルを開く（この時点では当事者のみ）
                 setIsBattleModalOpen(true);
                 setMessage("バトル発生！ポイントを賭けてください。");
             }
@@ -1467,6 +1464,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 setIsBattleModalOpen(true);
             }
             
+            // 非当事者の場合：バトルモーダルを閉じる
+            if (!isParticipant && isBattleModalOpen) {
+                setIsBattleModalOpen(false);
+            }
+            
             // 全当事者が賭けを完了した場合、結果を処理
             if (battle.status === 'betting') {
                 const allParticipantsBetted = battle.participants?.every(pid => 
@@ -1477,6 +1479,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     processBattleResult(battle);
                 }
             }
+        } else if (!gameData?.activeBattle && isBattleModalOpen) {
+            // バトルが終了した場合はモーダルを閉じる
+            setIsBattleModalOpen(false);
         }
     }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen]);
 
@@ -2342,7 +2347,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             )}
 
             {/* モーダル */}
-            {isBattleModalOpen && (
+            {isBattleModalOpen && gameData?.activeBattle && gameData.activeBattle.participants?.includes(userId) && (
                 <BattleModal
                     isOpen={isBattleModalOpen}
                     onClose={() => setIsBattleModalOpen(false)}
