@@ -86,13 +86,43 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
     useEffect(() => {
         if (!gameId || !userId) return;
+        
+        console.log("🔗 [CourseCreation] Setting up real-time listener for game:", gameId);
+        
         const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
         const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
+                console.log("📱 [CourseCreation] Game data updated:", {
+                    status: data.status,
+                    players: data.players,
+                    currentUserIncluded: data.players?.includes(userId),
+                    mazesCount: Object.keys(data.mazes || {}).length
+                });
+                
                 setGameData(data);
                 const newGameType = data.gameType || 'standard';
                 if (gameType !== newGameType) setGameType(newGameType); // Update gameType based on Firestore
+
+                // ゲーム状態が無効な場合はロビーに戻る
+                if (data.status === 'abandoned' || data.status === 'disbanded') {
+                    console.log("⚠️ [CourseCreation] Game was abandoned/disbanded, returning to lobby");
+                    setMessage("ゲームが解散されました。ロビーに戻ります。");
+                    localStorage.removeItem('labyrinthGameId');
+                    localStorage.removeItem('labyrinthGameType');
+                    setTimeout(() => setScreen('lobby'), 2000);
+                    return;
+                }
+
+                // 現在のユーザーがプレイヤーリストに含まれていない場合
+                if (!data.players || !data.players.includes(userId)) {
+                    console.log("⚠️ [CourseCreation] Current user not in players list, returning to lobby");
+                    setMessage("プレイヤーリストから除外されました。ロビーに戻ります。");
+                    localStorage.removeItem('labyrinthGameId');
+                    localStorage.removeItem('labyrinthGameType');
+                    setTimeout(() => setScreen('lobby'), 2000);
+                    return;
+                }
 
                 if (data.status === "playing" || (newGameType === 'extra' && data.currentExtraModePhase && data.currentExtraModePhase !== "mazeCreation")) {
                     setScreen('play');
@@ -110,10 +140,20 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                      updateMessage(myMazeWalls, startPos, goalPos, newGameType === 'extra' ? EXTRA_GRID_SIZE : STANDARD_GRID_SIZE);
                 }
             } else {
-                setMessage("ゲームデータが見つかりません。");
+                console.log("❌ [CourseCreation] Game document does not exist");
+                setMessage("ゲームデータが見つかりません。ロビーに戻ります。");
+                localStorage.removeItem('labyrinthGameId');
+                localStorage.removeItem('labyrinthGameType');
+                setTimeout(() => setScreen('lobby'), 2000);
             }
+        }, (error) => {
+            console.error("❌ [CourseCreation] Error in real-time listener:", error);
+            setMessage("接続エラーが発生しました。ページをリロードしてください。");
         });
-        return () => unsubscribe();
+        return () => {
+            console.log("🔌 [CourseCreation] Unsubscribing from real-time listener");
+            unsubscribe();
+        };
     }, [gameId, userId, setScreen, myMazeWalls, startPos, goalPos, gameType]); // Added gameType to dependencies for updateMessage
 
     const updateMessage = (newWalls = myMazeWalls, newStart = startPos, newGoal = goalPos, gridSizeToUse = currentGridSize) => {
@@ -321,6 +361,7 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         sharedDataFromAllies: { walls: [], scoutLogs: [] }, // Extra mode
                         temporaryPriorityBoost: 0, // Extra mode
                         betrayedAllies: [], // Extra mode for SAB_BETRAY_AND_WIN
+                        playerName: pid === userId ? currentUserName : (pid.startsWith('debug_player') ? `デバッグプレイヤー${pid.charAt(12)}` : `プレイヤー${pid.substring(0,8)}...`) // プレイヤー名を保存
                     };
                 });
 

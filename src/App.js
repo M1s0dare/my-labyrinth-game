@@ -34,6 +34,9 @@ function App() {
                     if (user) {
                         // 認証済みならユーザーIDをセット
                         setUserId(user.uid);
+                        
+                        // アプリ起動時に古いゲームデータをチェック・クリーンアップ
+                        await cleanupStaleGameData(user.uid);
                     } else {
                         // カスタムトークンがあればそれでサインイン、なければ匿名認証
                         if (typeof window !== 'undefined' && typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
@@ -58,6 +61,53 @@ function App() {
         };
         initAuth();
     }, []);
+
+    // === 古いゲームデータのクリーンアップ処理 ===
+    const cleanupStaleGameData = async (currentUserId) => {
+        try {
+            console.log("🧹 [App] Starting stale game data cleanup for user:", currentUserId);
+            
+            const storedGameId = localStorage.getItem('labyrinthGameId');
+            if (storedGameId) {
+                const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, storedGameId);
+                const gameSnap = await getDoc(gameDocRef);
+                
+                if (gameSnap.exists()) {
+                    const gameData = gameSnap.data();
+                    const gameCreatedAt = gameData.createdAt?.toDate();
+                    const now = new Date();
+                    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+                    
+                    // ゲームが1時間以上前のものか、ユーザーが含まれていない場合はクリア
+                    if (!gameCreatedAt || gameCreatedAt < oneHourAgo || 
+                        !gameData.players || !gameData.players.includes(currentUserId) ||
+                        gameData.status === 'abandoned' || gameData.status === 'disbanded') {
+                        
+                        console.log("🗑️ [App] Clearing stale game data from localStorage");
+                        localStorage.removeItem('labyrinthGameId');
+                        localStorage.removeItem('labyrinthGameType');
+                    } else {
+                        console.log("✅ [App] Game data is valid, keeping it");
+                        // 有効なゲームが存在する場合は適切な画面に遷移
+                        if (gameData.status === 'creating') {
+                            setScreen('courseCreation');
+                        } else if (gameData.status === 'playing') {
+                            setScreen('play');
+                        }
+                    }
+                } else {
+                    console.log("🗑️ [App] Game document does not exist, clearing localStorage");
+                    localStorage.removeItem('labyrinthGameId');
+                    localStorage.removeItem('labyrinthGameType');
+                }
+            }
+        } catch (error) {
+            console.error("❌ [App] Error during stale game data cleanup:", error);
+            // エラーが発生した場合は安全のためローカルストレージをクリア
+            localStorage.removeItem('labyrinthGameId');
+            localStorage.removeItem('labyrinthGameType');
+        }
+    };
 
     // === ページ離脱時のユーザー情報クリア処理 ===
     useEffect(() => {

@@ -111,9 +111,39 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
         
         console.log("🔍 [DEBUG] Searching for existing games:", { mode, gameType, requiredPlayerCount });
 
+        // 古いゲームや無効なゲームをクリーンアップ
+        try {
+            console.log("🧹 [Cleanup] Searching for old/invalid games to clean up");
+            const allGamesQuery = query(gamesRef, where("status", "in", ["waiting", "creating"]));
+            const allGamesSnapshot = await getDocs(allGamesQuery);
+            
+            const now = new Date();
+            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+            
+            for (const gameDoc of allGamesSnapshot.docs) {
+                const gameData = gameDoc.data();
+                const gameCreatedAt = gameData.createdAt?.toDate();
+                
+                // 1時間以上前に作成されたゲームや、プレイヤーが重複しているゲームを削除
+                const shouldDelete = !gameCreatedAt || gameCreatedAt < oneHourAgo || 
+                                   (gameData.players && gameData.players.filter(p => p === userId).length > 1);
+                
+                if (shouldDelete) {
+                    console.log("🗑️ [Cleanup] Deleting old/invalid game:", gameDoc.id);
+                    await updateDoc(doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameDoc.id), {
+                        status: 'abandoned',
+                        abandonedAt: serverTimestamp(),
+                        abandonReason: 'Automatic cleanup - old or invalid game'
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("❌ [Cleanup] Error during cleanup:", error);
+        }
+
         // デバッグモードの場合、待機中のゲームをスキップして新規作成
         if (!debugMode) {
-            // 待機中のゲームを検索（standardのみ）
+            // 待機中のゲームを検索（standardのみ、最近作成されたもののみ）
             const q = query(gamesRef, where("mode", "==", mode), where("gameType", "==", "standard"), where("status", "==", "waiting"));
             const querySnapshot = await getDocs(q);
 
@@ -127,16 +157,26 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
                         id: gameDoc.id,
                         players: gameData.players,
                         playerCount: gameData.players.length,
-                        includesCurrentUser: gameData.players.includes(userId)
+                        includesCurrentUser: gameData.players.includes(userId),
+                        createdAt: gameData.createdAt?.toDate()
                     });
                     
-                    if (gameData.players.length < requiredPlayerCount && !gameData.players.includes(userId)) {
+                    // 条件チェック：プレイヤー数が上限未満、現在のユーザーが含まれていない、最近作成された
+                    const gameCreatedAt = gameData.createdAt?.toDate();
+                    const isRecent = !gameCreatedAt || (new Date() - gameCreatedAt) < 60 * 60 * 1000; // 1時間以内
+                    
+                    if (gameData.players.length < requiredPlayerCount && 
+                        !gameData.players.includes(userId) && 
+                        isRecent &&
+                        gameData.players.length > 0) { // プレイヤーが存在することを確認
+                        
                         gameIdToJoin = gameDoc.id;
                         console.log("✅ [DEBUG] Joining existing game:", gameIdToJoin);
                         
                         await updateDoc(doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameIdToJoin), {
                             players: arrayUnion(userId),
-                            status: gameData.players.length + 1 === requiredPlayerCount ? "creating" : "waiting"
+                            status: gameData.players.length + 1 === requiredPlayerCount ? "creating" : "waiting",
+                            lastUpdated: serverTimestamp()
                         });
                         
                         console.log("✅ [DEBUG] Successfully joined game. New status:", gameData.players.length + 1 === requiredPlayerCount ? "creating" : "waiting");
@@ -176,6 +216,7 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
                     players: playersArray,
                     hostId: userId,
                     createdAt: serverTimestamp(),
+                    lastUpdated: serverTimestamp(),
                     currentTurnPlayerId: null,
                     turnOrder: [],
                     mazes: {},
@@ -185,7 +226,8 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
                     activeBattle: null,
                     chatMessagesLastFetch: null,
                     // エクストラモード関連の項目を削除
-                    debugMode: debugMode // デバッグモードフラグを追加
+                    debugMode: debugMode, // デバッグモードフラグを追加
+                    version: Date.now() // バージョン管理用のタイムスタンプを追加
                 };
                 
                 console.log("🆕 [DEBUG] New game data:", newGameData);
