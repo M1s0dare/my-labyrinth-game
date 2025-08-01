@@ -82,6 +82,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     
     // ホームに戻る確認ダイアログ
     const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
+    
+    // 全プレイヤー退出確認システム
+    const [showExitVoteDialog, setShowExitVoteDialog] = useState(false);
+    const [exitInitiatedBy, setExitInitiatedBy] = useState(null);
+    const [exitVotes, setExitVotes] = useState({});
+    const [hasVotedToExit, setHasVotedToExit] = useState(false);
 
     // デバッグモード用のプレイヤー切り替え機能
     const [debugCurrentPlayerId, setDebugCurrentPlayerId] = useState(userId);
@@ -554,12 +560,16 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     updates.disbandReason = `${playerName}が退出したため`;
                     updates.disbandedAt = serverTimestamp();
                     updates.disbandedBy = userId;
+                    updates.exitVote = deleteField(); // 退出投票をクリア
                     
                     // チャットに解散メッセージを送信
                     await sendSystemChatMessage(`${playerName}が抜けたのでこのゲームは解散です。`);
                 } else {
                     // 残りプレイヤーがいる場合は退出メッセージのみ
                     await sendSystemChatMessage(`${playerName}がゲームから退出しました。`);
+                    
+                    // 退出投票をクリア（誰かが抜けた場合は投票無効）
+                    updates.exitVote = deleteField();
                     
                     // 現在のターンプレイヤーが退出した場合、次のプレイヤーにターンを移す
                     if (currentGameData.currentTurnPlayerId === userId && remainingPlayers.length > 0) {
@@ -638,6 +648,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setCanPressButton(true);
         setShowExitConfirmDialog(false);
         
+        // 退出投票関連のリセット
+        setShowExitVoteDialog(false);
+        setExitInitiatedBy(null);
+        setExitVotes({});
+        setHasVotedToExit(false);
+        
         // 3. デバッグモード関連の状態をリセット
         setDebugCurrentPlayerId(userId);
         setDebugPlayerStates({});
@@ -655,7 +671,62 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // ホームに戻る確認処理（完全リセット付き）
     const handleExitConfirm = () => {
         setShowExitConfirmDialog(false);
-        handleGameExit();
+        initiateExitVote();
+    };
+
+    // 退出投票を開始
+    const initiateExitVote = async () => {
+        if (!gameData || !gameId) return;
+        
+        try {
+            const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
+            
+            // 自分の投票を含めて投票を開始
+            const initialVotes = { [userId]: true };
+            
+            await updateDoc(gameDocRef, {
+                exitVote: {
+                    initiatedBy: userId,
+                    startTime: serverTimestamp(),
+                    votes: initialVotes
+                }
+            });
+            
+            setHasVotedToExit(true);
+            setMessage("他のプレイヤーの退出確認を待っています...");
+            sendSystemChatMessage(`${currentUserName}がゲーム終了を提案しました。`);
+            
+        } catch (error) {
+            console.error("Error initiating exit vote:", error);
+            setMessage("退出投票の開始に失敗しました。");
+        }
+    };
+
+    // 退出投票
+    const voteToExit = async (vote) => {
+        if (!gameData?.exitVote || hasVotedToExit) return;
+        
+        try {
+            const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
+            
+            await updateDoc(gameDocRef, {
+                [`exitVote.votes.${userId}`]: vote
+            });
+            
+            setHasVotedToExit(true);
+            setShowExitVoteDialog(false);
+            
+            if (vote) {
+                setMessage("ゲーム終了に賛成しました。");
+            } else {
+                setMessage("ゲーム終了に反対しました。");
+                sendSystemChatMessage(`${currentUserName}がゲーム終了に反対しました。`);
+            }
+            
+        } catch (error) {
+            console.error("Error voting to exit:", error);
+            setMessage("投票に失敗しました。");
+        }
     };
 
     // ホームに戻るボタンのクリック処理
@@ -1484,6 +1555,51 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             setIsBattleModalOpen(false);
         }
     }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen]);
+
+    // 退出投票状態監視
+    useEffect(() => {
+        if (gameData?.exitVote) {
+            const vote = gameData.exitVote;
+            
+            // 自分が開始者でない場合、投票ダイアログを表示
+            if (vote.initiatedBy !== userId && !showExitVoteDialog && !hasVotedToExit) {
+                setExitInitiatedBy(vote.initiatedBy);
+                setExitVotes(vote.votes || {});
+                setShowExitVoteDialog(true);
+            }
+            
+            // 全員が賛成票を投じた場合、ゲーム終了
+            if (vote.votes && gameData.players) {
+                const allPlayersVoted = gameData.players.every(playerId => 
+                    vote.votes[playerId] !== undefined
+                );
+                const allVotedYes = gameData.players.every(playerId => 
+                    vote.votes[playerId] === true
+                );
+                
+                if (allPlayersVoted && allVotedYes) {
+                    handleGameExit();
+                } else if (allPlayersVoted && !allVotedYes) {
+                    // 誰かが反対票を投じた場合、投票をリセット
+                    setTimeout(() => {
+                        if (vote.initiatedBy === userId) {
+                            setMessage("ゲーム終了が否決されました。");
+                        }
+                        setShowExitVoteDialog(false);
+                        setHasVotedToExit(false);
+                        setExitInitiatedBy(null);
+                        setExitVotes({});
+                    }, 2000);
+                }
+            }
+        } else {
+            // 退出投票がない場合は状態をリセット
+            setShowExitVoteDialog(false);
+            setHasVotedToExit(false);
+            setExitInitiatedBy(null);
+            setExitVotes({});
+        }
+    }, [gameData?.exitVote, gameData?.players, userId, showExitVoteDialog, hasVotedToExit]);
 
     // handleSendChatMessage関数の実装
     const handleSendChatMessage = async () => {
@@ -2421,11 +2537,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             {showExitConfirmDialog && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-md w-11/12">
-                        <h2 className="text-xl font-bold mb-4 text-gray-800">確認</h2>
+                        <h2 className="text-xl font-bold mb-4 text-gray-800">ゲーム終了の確認</h2>
                         <p className="text-gray-600 mb-6">
-                            本当にホームに戻りますか？<br />
-                            <span className="text-red-600 text-sm">
-                                ※ あなたが抜けるとゲームが解散され、他のプレイヤーも強制終了になります。
+                            ゲームを終了してホームに戻りますか？<br />
+                            <span className="text-blue-600 text-sm mt-2 block">
+                                ※ 他のプレイヤーにも確認が求められ、全員が同意した場合のみゲームが終了します。
                             </span>
                         </p>
                         <div className="flex gap-3 justify-end">
@@ -2439,7 +2555,65 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 onClick={handleExitConfirm}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
                             >
-                                ホームに戻る
+                                ゲーム終了を提案
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 退出投票ダイアログ */}
+            {showExitVoteDialog && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-11/12">
+                        <h2 className="text-xl font-bold mb-4 text-gray-800">ゲーム終了の投票</h2>
+                        <p className="text-gray-600 mb-4">
+                            {getUserNameById(exitInitiatedBy)}がゲーム終了を提案しました。<br />
+                            ゲームを終了しますか？
+                        </p>
+                        
+                        {/* 現在の投票状況 */}
+                        <div className="mb-6 p-3 bg-gray-50 rounded">
+                            <p className="text-sm font-semibold text-gray-700 mb-2">投票状況:</p>
+                            <div className="space-y-1">
+                                {gameData?.players?.map(playerId => {
+                                    const playerName = playerId === userId ? currentUserName : getUserNameById(playerId);
+                                    const vote = exitVotes[playerId];
+                                    let status = "未投票";
+                                    let statusColor = "text-gray-500";
+                                    
+                                    if (vote === true) {
+                                        status = "賛成";
+                                        statusColor = "text-green-600";
+                                    } else if (vote === false) {
+                                        status = "反対";
+                                        statusColor = "text-red-600";
+                                    }
+                                    
+                                    return (
+                                        <div key={playerId} className="flex justify-between text-sm">
+                                            <span>{playerName}</span>
+                                            <span className={statusColor}>{status}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => voteToExit(false)}
+                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded"
+                                disabled={hasVotedToExit}
+                            >
+                                反対
+                            </button>
+                            <button
+                                onClick={() => voteToExit(true)}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
+                                disabled={hasVotedToExit}
+                            >
+                                賛成
                             </button>
                         </div>
                     </div>
