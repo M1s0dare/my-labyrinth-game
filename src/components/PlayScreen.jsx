@@ -2390,7 +2390,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 )}
                             </div>
                         ) : (
-                            // 二人対戦モード：従来通りの表示
+                            // 二人対戦モード：自分が作った迷路を表示
                             <div>
                                 <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 text-center">
                                     🏗️ 自分の迷宮（相手攻略中）
@@ -2417,21 +2417,24 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                 />
                                             </div>
                                         </div>
+                                        
+                                        <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
+                                            <p className="font-semibold text-blue-700">あなたの作った迷路:</p>
+                                            <p>相手が攻略中です</p>
+                                            <p>全ての壁が見えています</p>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="flex items-center justify-center h-48 sm:h-64 bg-gray-50 rounded">
                                         <div className="text-center">
-                                            <p className="text-gray-500 mb-2">自分の迷宮データを読み込み中...</p>
-                                            <p className="text-xs text-gray-400">ゲームID: {gameId}</p>
-                                            <p className="text-xs text-gray-400">ユーザーID: {userId}</p>
+                                            <p className="text-gray-500 mb-2">自分の迷路を読み込み中...</p>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         )}
-
-
                     </div>
+
                 </div>
             ) : (
                 // エクストラモードのレスポンシブレイアウト
