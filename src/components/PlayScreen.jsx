@@ -42,6 +42,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [chatInput, setChatInput] = useState("");
     const chatLogRef = useRef(null);
     const [isBattleModalOpen, setIsBattleModalOpen] = useState(false);
+    const [viewingMazeOwnerId, setViewingMazeOwnerId] = useState(null); // 四人対戦で右側に表示する迷路の作成者ID
     const [gameType, setGameType] = useState('standard');
     const [phaseTimeLeft, setPhaseTimeLeft] = useState(null);
     const [overallTimeLeft, setOverallTimeLeft] = useState(null);
@@ -115,6 +116,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         console.log("Game data:", gameData);
         console.log("Effective player state:", effectivePlayerState);
         
+        // 四人対戦モードの場合、初期表示を自分の迷路に設定
+        if (gameData.mode === '4player' && !viewingMazeOwnerId) {
+            setViewingMazeOwnerId(effectiveUserId);
+        }
+        
         // 攻略する迷路の読み込み
         if (effectivePlayerState.assignedMazeOwnerId && gameData.mazes) {
             const assignedMaze = gameData.mazes[effectivePlayerState.assignedMazeOwnerId];
@@ -133,7 +139,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             setMyCreatedMazeData(gameData.mazes[effectiveUserId]);
         }
         
-    }, [gameData, effectivePlayerState, effectiveUserId, gameType, setMessage]);
+    }, [gameData, effectivePlayerState, effectiveUserId, gameType, setMessage, viewingMazeOwnerId]);
 
     // hitWallsの状態をFirestoreから同期
     useEffect(() => {
@@ -609,6 +615,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setChatMessages([]);
         setChatInput("");
         setIsBattleModalOpen(false);
+        setViewingMazeOwnerId(null);
         setGameType('standard');
         setPhaseTimeLeft(null);
         setOverallTimeLeft(null);
@@ -1759,6 +1766,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             mazeData={mazeToPlayData}
                                             playerPosition={effectivePlayerState?.position}
                                             otherPlayers={(() => {
+                                                // 四人対戦モードでは他プレイヤーの位置を表示しない
+                                                if (gameData?.mode === '4player') return [];
+                                                
                                                 // 相手プレイヤーの情報を取得
                                                 if (!gameData?.players || !gameData?.playerStates) return [];
                                                 
@@ -1777,7 +1787,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                         return null;
                                                     })
                                                     .filter(player => player !== null); // nullを除外
-                                            })()} // 相手が同じ迷路を攻略している場合は相手の位置も表示
+                                            })()} // 四人対戦以外では相手が同じ迷路を攻略している場合は相手の位置も表示
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
                                             hitWalls={debugMode ? (gameData?.playerStates?.[effectiveUserId]?.hitWalls || []) : (myPlayerState?.hitWalls || hitWalls)}
@@ -1898,16 +1908,16 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                     <div className="flex items-center justify-center mb-2">
                                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600"></div>
                                     </div>
-                                    <p className="text-orange-600 font-semibold">⚔️ バトル進行中</p>
+                                    <p className="text-orange-600 font-semibold">⚔️ バトルが発生したのでしばらくお待ちください。</p>
                                     <p className="text-sm text-orange-500">
                                         {(() => {
                                             const participants = gameData.activeBattle.participants || [];
                                             const names = participants.map(pid => getUserNameById(pid)).join(" vs ");
-                                            return `${names}のバトル結果をお待ちください...`;
+                                            return `${names}のバトル中です`;
                                         })()}
                                     </p>
                                     <div className="mt-2 text-xs text-orange-400">
-                                        両者の賭けが完了するまでお待ちください
+                                        バトル結果をお待ちください
                                     </div>
                                 </div>
                             ) : isMyStandardTurn && !inStandardBattleBetting ? (
@@ -2012,58 +2022,157 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
                     {/* 右側：自分が作った迷路（相手が攻略中・壁が全て見える） */}
                     <div className="lg:col-span-1 xl:col-span-4 bg-white rounded-lg shadow-md p-2 sm:p-4 h-fit">
-                        <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 text-center">
-                            🏗️ 自分の迷宮（相手攻略中）
-                        </h2>
-                        
-                        {(debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData) ? (
+                        {gameData?.mode === '4player' ? (
+                            // 四人対戦モード：切り替え可能な迷路表示
                             <div>
-                                {/* 自分が作成した迷路（壁が全て見える） */}
-                                <div className="flex justify-center mb-4">
-                                    <div className="w-fit max-w-sm mx-auto">
-                                        <MazeGrid
-                                            mazeData={{
-                                                ...(debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData),
-                                                walls: ((debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData)?.walls || []).filter(w => w.active === true)
-                                            }}
-                                            playerPosition={null} // 自分の迷路なので自分の位置は表示しない
-                                            otherPlayers={(() => {
-                                                // 現在選択中のプレイヤー（デバッグモード考慮）の迷路を攻略している相手を探す
-                                                if (!gameData?.players || !gameData?.playerStates) return [];
-                                                
-                                                return gameData.players
-                                                    .filter(playerId => playerId !== effectiveUserId) // 現在のプレイヤー以外
-                                                    .map(playerId => {
-                                                        const playerState = gameData.playerStates[playerId];
-                                                        // 相手が現在のプレイヤーの迷路を攻略している場合
-                                                        if (playerState?.assignedMazeOwnerId === effectiveUserId) {
-                                                            return {
-                                                                id: playerId,
-                                                                position: playerState.position,
-                                                                name: getUserNameById(playerId)
-                                                            };
-                                                        }
-                                                        return null;
-                                                    })
-                                                    .filter(player => player !== null); // nullを除外
-                                            })()} // 現在のプレイヤーの迷路を攻略している相手の位置を表示
-                                            showAllWalls={true}
-                                            onCellClick={() => {}}
-                                            gridSize={currentGridSize}
-                                            sharedWalls={[]}
-                                            highlightPlayer={false}
-                                            smallView={false}
-                                        />
+                                <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 text-center">
+                                    🏗️ 迷宮ビューアー
+                                </h2>
+                                
+                                {/* 迷路切り替えボタン */}
+                                <div className="mb-4">
+                                    <div className="flex flex-wrap gap-1 justify-center">
+                                        {gameData.players?.map((playerId, index) => {
+                                            const isCurrentPlayer = playerId === effectiveUserId;
+                                            const isViewing = viewingMazeOwnerId === playerId;
+                                            const playerName = isCurrentPlayer ? '自分' : `P${index + 1}`;
+                                            
+                                            return (
+                                                <button
+                                                    key={playerId}
+                                                    onClick={() => setViewingMazeOwnerId(playerId)}
+                                                    className={`px-2 py-1 text-xs rounded ${
+                                                        isViewing
+                                                            ? 'bg-blue-500 text-white'
+                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    }`}
+                                                >
+                                                    {playerName}の迷路
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
+                                
+                                {gameData?.mazes?.[viewingMazeOwnerId] ? (
+                                    <div>
+                                        <div className="flex justify-center mb-4">
+                                            <div className="w-fit max-w-sm mx-auto">
+                                                <MazeGrid
+                                                    mazeData={{
+                                                        ...gameData.mazes[viewingMazeOwnerId],
+                                                        // 自分の迷路の場合は全ての壁を表示、他人の迷路の場合は壁を隠す
+                                                        walls: viewingMazeOwnerId === effectiveUserId 
+                                                            ? (gameData.mazes[viewingMazeOwnerId]?.walls || []).filter(w => w.active === true)
+                                                            : [] // 他人の迷路は壁を表示しない
+                                                    }}
+                                                    playerPosition={null}
+                                                    otherPlayers={(() => {
+                                                        // 表示中の迷路を攻略しているプレイヤーを表示
+                                                        if (!gameData?.players || !gameData?.playerStates) return [];
+                                                        
+                                                        return gameData.players
+                                                            .filter(playerId => playerId !== viewingMazeOwnerId) // 迷路作成者以外
+                                                            .map(playerId => {
+                                                                const playerState = gameData.playerStates[playerId];
+                                                                // 現在表示中の迷路を攻略している場合
+                                                                if (playerState?.assignedMazeOwnerId === viewingMazeOwnerId) {
+                                                                    return {
+                                                                        id: playerId,
+                                                                        position: playerState.position,
+                                                                        name: getUserNameById(playerId)
+                                                                    };
+                                                                }
+                                                                return null;
+                                                            })
+                                                            .filter(player => player !== null);
+                                                    })()}
+                                                    showAllWalls={viewingMazeOwnerId === effectiveUserId} // 自分の迷路のみ壁を表示
+                                                    onCellClick={() => {}}
+                                                    gridSize={currentGridSize}
+                                                    sharedWalls={[]}
+                                                    highlightPlayer={false}
+                                                    smallView={false}
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
+                                            <p className="font-semibold text-blue-700">
+                                                {viewingMazeOwnerId === effectiveUserId ? '自分の迷路' : '他プレイヤーの迷路'}
+                                            </p>
+                                            {viewingMazeOwnerId === effectiveUserId ? (
+                                                <p className="text-blue-600">全ての壁とスタート・ゴールが表示されています</p>
+                                            ) : (
+                                                <p className="text-blue-600">スタートとゴールのみ表示されています</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center h-48 sm:h-64 bg-gray-50 rounded">
+                                        <div className="text-center">
+                                            <p className="text-gray-500 mb-2">迷路データを読み込み中...</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
-                            <div className="flex items-center justify-center h-48 sm:h-64 bg-gray-50 rounded">
-                                <div className="text-center">
-                                    <p className="text-gray-500 mb-2">自分の迷宮データを読み込み中...</p>
-                                    <p className="text-xs text-gray-400">ゲームID: {gameId}</p>
-                                    <p className="text-xs text-gray-400">ユーザーID: {userId}</p>
-                                </div>
+                            // 二人対戦モード：従来通りの表示
+                            <div>
+                                <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 text-center">
+                                    🏗️ 自分の迷宮（相手攻略中）
+                                </h2>
+                                
+                                {(debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData) ? (
+                                    <div>
+                                        {/* 自分が作成した迷路（壁が全て見える） */}
+                                        <div className="flex justify-center mb-4">
+                                            <div className="w-fit max-w-sm mx-auto">
+                                                <MazeGrid
+                                                    mazeData={{
+                                                        ...(debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData),
+                                                        walls: ((debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData)?.walls || []).filter(w => w.active === true)
+                                                    }}
+                                                    playerPosition={null} // 自分の迷路なので自分の位置は表示しない
+                                                    otherPlayers={(() => {
+                                                        // 現在選択中のプレイヤー（デバッグモード考慮）の迷路を攻略している相手を探す
+                                                        if (!gameData?.players || !gameData?.playerStates) return [];
+                                                        
+                                                        return gameData.players
+                                                            .filter(playerId => playerId !== effectiveUserId) // 現在のプレイヤー以外
+                                                            .map(playerId => {
+                                                                const playerState = gameData.playerStates[playerId];
+                                                                // 相手が現在のプレイヤーの迷路を攻略している場合
+                                                                if (playerState?.assignedMazeOwnerId === effectiveUserId) {
+                                                                    return {
+                                                                        id: playerId,
+                                                                        position: playerState.position,
+                                                                        name: getUserNameById(playerId)
+                                                                    };
+                                                                }
+                                                                return null;
+                                                            })
+                                                            .filter(player => player !== null); // nullを除外
+                                                    })()} // 現在のプレイヤーの迷路を攻略している相手の位置を表示
+                                                    showAllWalls={true}
+                                                    onCellClick={() => {}}
+                                                    gridSize={currentGridSize}
+                                                    sharedWalls={[]}
+                                                    highlightPlayer={false}
+                                                    smallView={false}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center h-48 sm:h-64 bg-gray-50 rounded">
+                                        <div className="text-center">
+                                            <p className="text-gray-500 mb-2">自分の迷宮データを読み込み中...</p>
+                                            <p className="text-xs text-gray-400">ゲームID: {gameId}</p>
+                                            <p className="text-xs text-gray-400">ユーザーID: {userId}</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
