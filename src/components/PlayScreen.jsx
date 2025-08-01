@@ -170,15 +170,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             });
             
             // ターン進行
-            if (debugMode && gameData?.turnOrder) {
-                const currentTurnIndex = gameData.turnOrder.indexOf(gameData.currentTurnPlayerId);
-                const nextTurnIndex = (currentTurnIndex + 1) % gameData.turnOrder.length;
-                const nextPlayerId = gameData.turnOrder[nextTurnIndex];
-                
-                await updateDoc(gameDocRef, {
-                    currentTurnPlayerId: nextPlayerId,
-                    turnNumber: increment(1)
-                });
+            if (gameType === 'standard') {
+                setTimeout(() => {
+                    advanceStandardTurn();
+                }, 1500);
             }
             return;
         }
@@ -210,9 +205,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         
         // 境界チェック
         if (newR < 0 || newR >= gridSize || newC < 0 || newC >= gridSize) {
-            setMessage("盤外への移動はできません。");
+            setMessage("盤外への移動はできません。ターン終了です。");
             setIsMoving(false);
-            // 境界に阻まれた場合もボタンは無効のまま（ターン終了）
+            // 境界に阻まれた場合もターン終了
+            if (gameType === 'standard') {
+                setTimeout(() => {
+                    advanceStandardTurn();
+                }, 1500);
+            }
             return;
         }
         
@@ -282,7 +282,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 console.error("Error recording discovered wall:", error);
             }
 
-            setMessage(`壁に阻まれて移動できません。壁を発見しました！${gameData?.mode === '2player' ? ' ターン終了です。' : ''}`);
+            setMessage(`壁に阻まれて移動できません。壁を発見しました！ ターン終了です。`);
             setIsMoving(false);
             
             // 仕様書：壁にぶつかるとターン終了
@@ -390,28 +390,18 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 setMessage("バトル発生！ポイントを賭けてください。");
             }
             
-            // デバッグモードまたは四人対戦時は自動的にターン切り替え（二人対戦では切り替えない）
-            if (debugMode && gameData?.turnOrder) {
-                const currentTurnIndex = gameData.turnOrder.indexOf(gameData.currentTurnPlayerId);
-                const nextTurnIndex = (currentTurnIndex + 1) % gameData.turnOrder.length;
-                const nextPlayerId = gameData.turnOrder[nextTurnIndex];
-                
-                updates.currentTurnPlayerId = nextPlayerId;
-                updates.turnNumber = increment(1);
-                
-                const currentPlayerName = getUserNameById(gameData.currentTurnPlayerId);
-                const nextPlayerName = getUserNameById(nextPlayerId);
-                console.log(`🔧 [DEBUG] Auto turn switch: ${currentPlayerName} → ${nextPlayerName}`);
-            }
-            // 二人対戦モードでは移動成功時はターンを維持（連続移動可能）
+            // 移動成功時はターンを継続（壁にぶつかるまで連続移動可能）
+            // デバッグモードでも通常モードと同様に、壁にぶつかるまでターンを継続
+            // 自動ターン切り替えは行わない
             
             await updateDoc(gameDocRef, updates);
             
-            // 二人対戦モード：移動成功時は連続移動を許可（ゴール到達時以外）
+            // 移動成功時は連続移動を許可（ゴール到達時以外）
             // 壁にぶつかるまで自分のターンを継続
             if (!(mazeToPlayData && newR === mazeToPlayData.goal.r && newC === mazeToPlayData.goal.c)) {
                 setCanPressButton(true);
-                if (gameType === 'standard' && gameData?.mode === '2player') {
+                // 連続移動可能のメッセージを表示
+                if (gameType === 'standard') {
                     setMessage(`${moveMessage} 連続移動可能です。`);
                 }
             }
@@ -1296,11 +1286,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     turnNumber: increment(1)
                 };
                 
-                // 二人対戦時のターン切り替えメッセージ
-                if (freshData.mode === '2player') {
-                    const nextPlayerName = getUserNameById(nextPlayerId);
-                    console.log(`🔄 Turn switched to: ${nextPlayerName}`);
-                }
+                // ターン切り替えメッセージ
+                const nextPlayerName = getUserNameById(nextPlayerId);
+                console.log(`🔄 Turn switched to: ${nextPlayerName}`);
                 
                 // ゴール判定とゲーム終了チェック
                 const goaledPlayers = freshData.players.filter(pid => 
@@ -1798,9 +1786,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             <p><strong>方法1:</strong> 下の移動ボタンを使用</p>
                                             <p><strong>方法2:</strong> 左の迷路上の隣接セルを直接クリック</p>
                                             <p><strong>方法3:</strong> キーボードの矢印キー または WASD</p>
-                                            {gameData?.mode === '2player' && (
-                                                <p className="text-green-600 font-semibold">💡 連続移動可能！壁にぶつかるまで移動し続けられます</p>
-                                            )}
+                                            <p className="text-green-600 font-semibold">💡 連続移動可能！壁にぶつかるまで移動し続けられます</p>
                                         </div>
                                     </div>
                                     
