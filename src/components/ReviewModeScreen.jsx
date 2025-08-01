@@ -181,7 +181,6 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                         {players.map((playerId, index) => {
                             const playerState = gameData.playerStates[playerId];
                             const playerName = playerId === userId ? currentUserName : `プレイヤー${index + 1}`;
-                            
                             return (
                                 <div key={playerId} className="bg-white p-3 rounded border">
                                     <div className="flex items-center justify-between">
@@ -190,19 +189,15 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             <span className="text-green-600 font-bold">ゴール達成!</span>
                                         )}
                                     </div>
-                                    if(gameData?.mode==='4player'){
                                     <div className="text-sm text-gray-600 mt-1">
-                                        <p>スコア: {playerState?.score || 0}pt</p>
-                                        <p>到達マス数: {Object.keys(playerState?.revealedCells || {}).length}</p>
+                                        {gameData?.mode === '4player' && (
+                                             <p>スコア: {playerState?.score || 0}pt</p>
+                                                     )}
+                                    <p>到達マス数: {Object.keys(playerState?.revealedCells || {}).length}</p>
                                     </div>
-                                    }else{
-                                        <div className="text-sm text-gray-600 mt-1">
-                                        <p>到達マス数: {Object.keys(playerState?.revealedCells || {}).length}</p>
-                                        </div>
-                                    }
                                 </div>
                             );
-                        })}
+                        }　)}
                     </div>
                 </div>
             </div>
@@ -358,9 +353,9 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                                 <p>• 最終位置: ({selectedPlayerState.position?.r || 0}, {selectedPlayerState.position?.c || 0})</p>
                                                 <p>• ぶつかった壁: {(selectedPlayerState.hitWalls || []).length}個</p>
                                                 <p>• ゴール達成: {selectedPlayerState.goalTime ? '✅ 達成' : '❌ 未達成'}</p>
-                                                {selectedPlayerState.goalTime && (
-                                                    <p>• スコア: {selectedPlayerState.score || 0}pt</p>
-                                                )}
+                                                    {gameData?.mode === '4player' && selectedPlayerState.goalTime && (
+                                                            <p>スコア: {selectedPlayerState?.score || 0}pt</p>
+                                                        )}
                                             </div>
                                         </div>
                                     )}
