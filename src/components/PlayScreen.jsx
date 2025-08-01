@@ -282,7 +282,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 console.error("Error recording discovered wall:", error);
             }
 
-            setMessage(`壁に阻まれて移動できません。壁を発見しました！`);
+            setMessage(`壁に阻まれて移動できません。壁を発見しました！${gameData?.mode === '2player' ? ' ターン終了です。' : ''}`);
             setIsMoving(false);
             
             // 仕様書：壁にぶつかるとターン終了
@@ -314,12 +314,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             };
             
             // 新しいセルの発見ボーナス
+            let moveMessage = "";
             if (!effectivePlayerState.revealedCells[`${newR}-${newC}`]) {
                 updates[`playerStates.${effectiveUserId}.score`] = increment(1);
                 updates[`playerStates.${effectiveUserId}.revealedCells.${newR}-${newC}`] = true;
-                setMessage(`(${newR},${newC})に移動！ +1pt`);
+                moveMessage = `(${newR},${newC})に移動！ +1pt`;
+                setMessage(moveMessage);
             } else {
-                setMessage(`(${newR},${newC})に移動しました。`);
+                moveMessage = `(${newR},${newC})に移動しました。`;
+                setMessage(moveMessage);
             }
             
             // ゴール判定
@@ -341,6 +344,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     }
                     rankMessage = `${currentGoalCount + 1}位でゴール達成！`;
                     setMessage(`ゴール達成！${currentGoalCount + 1}位 +${goalPoints}pt`);
+                } else if (gameData?.mode === '2player') {
+                    // 二人対戦モード：先着順で勝負
+                    rankMessage = "ゴール達成！勝利です！";
+                    setMessage("🎉 ゴール達成！勝利です！");
                 } else {
                     rankMessage = "ゴール達成！";
                     setMessage("ゴール達成！");
@@ -383,7 +390,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 setMessage("バトル発生！ポイントを賭けてください。");
             }
             
-            // デバッグモード時は自動的にターン切り替え
+            // デバッグモードまたは四人対戦時は自動的にターン切り替え（二人対戦では切り替えない）
             if (debugMode && gameData?.turnOrder) {
                 const currentTurnIndex = gameData.turnOrder.indexOf(gameData.currentTurnPlayerId);
                 const nextTurnIndex = (currentTurnIndex + 1) % gameData.turnOrder.length;
@@ -396,12 +403,17 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 const nextPlayerName = getUserNameById(nextPlayerId);
                 console.log(`🔧 [DEBUG] Auto turn switch: ${currentPlayerName} → ${nextPlayerName}`);
             }
+            // 二人対戦モードでは移動成功時はターンを維持（連続移動可能）
             
             await updateDoc(gameDocRef, updates);
             
-            // 移動成功時は連続移動を許可（ゴール到達時以外）
+            // 二人対戦モード：移動成功時は連続移動を許可（ゴール到達時以外）
+            // 壁にぶつかるまで自分のターンを継続
             if (!(mazeToPlayData && newR === mazeToPlayData.goal.r && newC === mazeToPlayData.goal.c)) {
                 setCanPressButton(true);
+                if (gameType === 'standard' && gameData?.mode === '2player') {
+                    setMessage(`${moveMessage} 連続移動可能です。`);
+                }
             }
             
         } catch (error) {
@@ -1284,6 +1296,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     turnNumber: increment(1)
                 };
                 
+                // 二人対戦時のターン切り替えメッセージ
+                if (freshData.mode === '2player') {
+                    const nextPlayerName = getUserNameById(nextPlayerId);
+                    console.log(`🔄 Turn switched to: ${nextPlayerName}`);
+                }
+                
                 // ゴール判定とゲーム終了チェック
                 const goaledPlayers = freshData.players.filter(pid => 
                     freshData.playerStates[pid]?.goalTime
@@ -1780,6 +1798,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             <p><strong>方法1:</strong> 下の移動ボタンを使用</p>
                                             <p><strong>方法2:</strong> 左の迷路上の隣接セルを直接クリック</p>
                                             <p><strong>方法3:</strong> キーボードの矢印キー または WASD</p>
+                                            {gameData?.mode === '2player' && (
+                                                <p className="text-green-600 font-semibold">💡 連続移動可能！壁にぶつかるまで移動し続けられます</p>
+                                            )}
                                         </div>
                                     </div>
                                     
