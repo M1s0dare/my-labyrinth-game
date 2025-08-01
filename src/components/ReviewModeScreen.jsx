@@ -134,6 +134,22 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
         );
     }
 
+    // 選択されたプレイヤーの状態を取得（迷路を攻略したプレイヤー）
+    const selectedPlayerState = useMemo(() => {
+        // 選択された迷路を攻略したプレイヤーを探す
+        const playerWhoSolvedThisMaze = players.find(playerId => {
+            const playerState = gameData.playerStates[playerId];
+            return playerState?.assignedMazeOwnerId === selectedMazeOwner;
+        });
+        
+        if (playerWhoSolvedThisMaze) {
+            return gameData.playerStates[playerWhoSolvedThisMaze];
+        }
+        
+        // 見つからない場合は、迷路作成者自身の状態を返す（フォールバック）
+        return gameData.playerStates[selectedMazeOwner];
+    }, [players, gameData.playerStates, selectedMazeOwner]);
+
     const currentPlayerState = gameData.playerStates[userId];
 
     return (
@@ -277,18 +293,14 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             {/* 迷路グリッド */}
                                             <MazeGrid
                                                 mazeData={currentDisplayMaze}
-                                                playerPosition={currentPlayerState?.position}
-                                                otherPlayers={players.filter(p => p !== userId).map(p => ({
-                                                    id: p,
-                                                    position: gameData.playerStates[p]?.position,
-                                                    name: p === userId ? currentUserName : `プレイヤー${players.indexOf(p) + 1}`
-                                                }))}
-                                                revealedCells={currentPlayerState?.revealedCells || {}}
+                                                playerPosition={selectedPlayerState?.position} // 選択されたプレイヤーの最終位置のみ表示
+                                                otherPlayers={[]} // 他のプレイヤーは表示しない
+                                                revealedCells={selectedPlayerState?.revealedCells || {}} // 選択されたプレイヤーの通った経路
                                                 revealedPlayerWalls={(currentDisplayMaze?.walls || []).filter(wall => wall.active === true)}
                                                 onCellClick={() => {}}
                                                 gridSize={currentDisplayMaze?.gridSize || 6}
                                                 sharedWallsFromAllies={[]}
-                                                highlightPlayer={true}
+                                                highlightPlayer={true} // 選択されたプレイヤーの位置をハイライト
                                                 smallView={false}
                                                 showAllWalls={true}
                                             />
@@ -307,6 +319,25 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                         <p>• ゴール位置: ({currentDisplayMaze.goal?.r || 0}, {currentDisplayMaze.goal?.c || 0})</p>
                                         <p>• 作成者: {selectedMazeOwner === userId ? currentUserName : `プレイヤー${players.indexOf(selectedMazeOwner) + 1}`}</p>
                                     </div>
+                                    
+                                    {/* 選択されたプレイヤーの攻略情報 */}
+                                    {selectedPlayerState && (
+                                        <div className="mt-3 pt-3 border-t border-blue-200">
+                                            <h5 className="font-semibold text-blue-800 mb-2">攻略結果</h5>
+                                            <div className="text-sm text-blue-700 space-y-1">
+                                                <p>• 攻略者: {(() => {
+                                                    const solverPlayerId = players.find(pid => gameData.playerStates[pid]?.assignedMazeOwnerId === selectedMazeOwner);
+                                                    return solverPlayerId === userId ? currentUserName : `プレイヤー${players.indexOf(solverPlayerId) + 1}`;
+                                                })()}</p>
+                                                <p>• 探索セル数: {Object.keys(selectedPlayerState.revealedCells || {}).length}個</p>
+                                                <p>• 最終位置: ({selectedPlayerState.position?.r || 0}, {selectedPlayerState.position?.c || 0})</p>
+                                                <p>• ゴール達成: {selectedPlayerState.goalTime ? '✅ 達成' : '❌ 未達成'}</p>
+                                                {selectedPlayerState.goalTime && (
+                                                    <p>• スコア: {selectedPlayerState.score || 0}pt</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (
