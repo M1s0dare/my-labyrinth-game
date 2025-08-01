@@ -69,30 +69,35 @@ function App() {
             
             if (currentGameId && userId) {
                 try {
-                    // Firebaseからプレイヤー情報を削除
-                    const { updateDoc, doc, getDoc, deleteField } = await import('firebase/firestore');
+                    // Firebaseからプレイヤー情報を削除（トランザクション使用で安全性向上）
+                    const { updateDoc, doc, getDoc, deleteField, runTransaction, serverTimestamp } = await import('firebase/firestore');
                     const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, currentGameId);
                     
-                    const gameSnap = await getDoc(gameDocRef);
-                    if (gameSnap.exists()) {
-                        const gameData = gameSnap.data();
-                        const remainingPlayers = (gameData.players || []).filter(pid => pid !== userId);
-                        
-                        if (remainingPlayers.length === 0) {
-                            // 最後のプレイヤーが離脱する場合、ゲームを解散
-                            await updateDoc(gameDocRef, {
-                                status: 'disbanded',
-                                disbandReason: 'プレイヤーが全員離脱したため',
-                                disbandedAt: new Date()
-                            });
-                        } else {
-                            // プレイヤー情報のみ削除
-                            await updateDoc(gameDocRef, {
+                    await runTransaction(db, async (transaction) => {
+                        const gameSnap = await transaction.get(gameDocRef);
+                        if (gameSnap.exists()) {
+                            const gameData = gameSnap.data();
+                            const remainingPlayers = (gameData.players || []).filter(pid => pid !== userId);
+                            
+                            const updates = {
                                 [`playerStates.${userId}`]: deleteField(),
-                                players: remainingPlayers
-                            });
+                                players: remainingPlayers,
+                                // 関連データも削除
+                                [`mazes.${userId}`]: deleteField(),
+                                [`declarations.${userId}`]: deleteField(),
+                                lastActivity: serverTimestamp()
+                            };
+                            
+                            if (remainingPlayers.length === 0) {
+                                // 最後のプレイヤーが離脱する場合、ゲームを解散
+                                updates.status = 'disbanded';
+                                updates.disbandReason = 'プレイヤーが全員離脱したため';
+                                updates.disbandedAt = serverTimestamp();
+                            }
+                            
+                            transaction.update(gameDocRef, updates);
                         }
-                    }
+                    });
                     
                     console.log("✅ [Cleanup] Firebase game data cleaned up");
                 } catch (error) {
@@ -100,11 +105,17 @@ function App() {
                 }
             }
             
-            // ローカルストレージからユーザー関連情報をクリア
-            localStorage.removeItem('labyrinthGameId');
-            localStorage.removeItem('labyrinthGameType');
-            localStorage.removeItem('labyrinth_username');
-            localStorage.removeItem('userId');
+            // ローカルストレージからユーザー関連情報を完全クリア
+            const keysToRemove = [
+                'labyrinthGameId',
+                'labyrinthGameType',
+                'labyrinth_username',
+                'userId',
+                'gameState',
+                'playerPosition',
+                'lastActivity'
+            ];
+            keysToRemove.forEach(key => localStorage.removeItem(key));
             
             console.log("🔄 [Cleanup] Local storage cleared on page unload");
             
@@ -171,15 +182,22 @@ function App() {
                         const isGameInvalid = game.status === 'disbanded' || 
                                             game.status === 'finished' ||
                                             !game.players ||
-                                            !game.players.includes(userId);
+                                            !game.players.includes(userId) ||
+                                            !game.playerStates ||
+                                            !game.playerStates[userId];
                         
                         if (isGameInvalid) {
                             console.log("❌ [DEBUG] Game is invalid or user not in players, clearing localStorage");
-                            localStorage.removeItem('labyrinthGameId');
-                            localStorage.removeItem('labyrinthGameType');
-                            // ユーザー情報もクリア（新しいゲームで新しいIDを生成するため）
-                            localStorage.removeItem('labyrinth_username');
-                            localStorage.removeItem('userId');
+                            const keysToRemove = [
+                                'labyrinthGameId',
+                                'labyrinthGameType',
+                                'labyrinth_username',
+                                'userId',
+                                'gameState',
+                                'playerPosition',
+                                'lastActivity'
+                            ];
+                            keysToRemove.forEach(key => localStorage.removeItem(key));
                             return;
                         }
                         

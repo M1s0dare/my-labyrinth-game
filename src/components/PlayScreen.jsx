@@ -543,45 +543,57 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             console.log("🔥 [GameExit] Starting comprehensive cleanup for user:", userId);
             
             // 1. ゲームデータからプレイヤー情報を削除
-            const gameSnap = await getDoc(gameDocRef);
-            if (gameSnap.exists()) {
-                const currentGameData = gameSnap.data();
-                const remainingPlayers = (currentGameData.players || []).filter(pid => pid !== userId);
-                
-                // プレイヤー状態を削除
-                const updates = {
-                    [`playerStates.${userId}`]: deleteField(),
-                    players: remainingPlayers
-                };
-                
-                // 残りプレイヤーが0人または1人の場合はゲームを解散
-                if (remainingPlayers.length <= 1) {
-                    updates.status = 'disbanded';
-                    updates.disbandReason = `${playerName}が退出したため`;
-                    updates.disbandedAt = serverTimestamp();
-                    updates.disbandedBy = userId;
-                    updates.exitVote = deleteField(); // 退出投票をクリア
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameDocRef);
+                if (gameSnap.exists()) {
+                    const currentGameData = gameSnap.data();
+                    const remainingPlayers = (currentGameData.players || []).filter(pid => pid !== userId);
                     
-                    // チャットに解散メッセージを送信
-                    await sendSystemChatMessage(`${playerName}が抜けたのでこのゲームは解散です。`);
-                } else {
-                    // 残りプレイヤーがいる場合は退出メッセージのみ
-                    await sendSystemChatMessage(`${playerName}がゲームから退出しました。`);
+                    const updates = {
+                        // プレイヤー状態を完全削除
+                        [`playerStates.${userId}`]: deleteField(),
+                        players: remainingPlayers,
+                        // 関連データも削除
+                        [`mazes.${userId}`]: deleteField(), // 作成した迷路も削除
+                        [`declarations.${userId}`]: deleteField(), // 宣言データも削除
+                        lastActivity: serverTimestamp() // 最終活動時刻を更新
+                    };
                     
-                    // 退出投票をクリア（誰かが抜けた場合は投票無効）
-                    updates.exitVote = deleteField();
-                    
-                    // 現在のターンプレイヤーが退出した場合、次のプレイヤーにターンを移す
-                    if (currentGameData.currentTurnPlayerId === userId && remainingPlayers.length > 0) {
-                        const currentIndex = currentGameData.players.indexOf(userId);
-                        const nextIndex = currentIndex < remainingPlayers.length ? currentIndex : 0;
-                        updates.currentTurnPlayerId = remainingPlayers[nextIndex];
+                    // 残りプレイヤーが0人または1人の場合はゲームを解散
+                    if (remainingPlayers.length <= 1) {
+                        updates.status = 'disbanded';
+                        updates.disbandReason = `${playerName}が退出したため`;
+                        updates.disbandedAt = serverTimestamp();
+                        updates.disbandedBy = userId;
+                        updates.exitVote = deleteField(); // 退出投票をクリア
+                        
+                        // 解散時は残りプレイヤーの状態もクリア
+                        remainingPlayers.forEach(playerId => {
+                            updates[`playerStates.${playerId}`] = deleteField();
+                        });
+                        
+                        // チャットに解散メッセージを送信
+                        await sendSystemChatMessage(`${playerName}が抜けたのでこのゲームは解散です。`);
+                    } else {
+                        // 残りプレイヤーがいる場合は退出メッセージのみ
+                        await sendSystemChatMessage(`${playerName}がゲームから退出しました。`);
+                        
+                        // 退出投票をクリア（誰かが抜けた場合は投票無効）
+                        updates.exitVote = deleteField();
+                        
+                        // 現在のターンプレイヤーが退出した場合、次のプレイヤーにターンを移す
+                        if (currentGameData.currentTurnPlayerId === userId && remainingPlayers.length > 0) {
+                            const currentIndex = currentGameData.players.indexOf(userId);
+                            const nextIndex = currentIndex < remainingPlayers.length ? currentIndex : 0;
+                            updates.currentTurnPlayerId = remainingPlayers[nextIndex];
+                        }
                     }
+                    
+                    transaction.update(gameDocRef, updates);
                 }
-                
-                await updateDoc(gameDocRef, updates);
-                console.log("✅ [GameExit] Game data updated, player removed");
-            }
+            });
+            
+            console.log("✅ [GameExit] Game data updated, player removed");
             
             // 2. 完全な状態リセット（ローカル状態とストレージを完全クリア）
             performCompleteStateReset();
@@ -604,13 +616,28 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const performCompleteStateReset = () => {
         console.log("🧹 [StateReset] Performing complete state reset");
         
-        // 1. ローカルストレージを完全クリア
-        localStorage.removeItem('labyrinthGameId');
-        localStorage.removeItem('labyrinthGameType');
-        localStorage.removeItem('currentUserName');
-        localStorage.removeItem('userId');
+        // 1. クリーンアップフラグを設定
+        setIsCleaningUp(true);
         
-        // 2. すべての状態を初期化
+        // 2. 全てのタイマーを確実にクリア
+        if (personalTimerIntervalRef.current) {
+            clearInterval(personalTimerIntervalRef.current);
+            personalTimerIntervalRef.current = null;
+        }
+        
+        // 3. ローカルストレージを完全クリア
+        const keysToRemove = [
+            'labyrinthGameId',
+            'labyrinthGameType',
+            'currentUserName',
+            'userId',
+            'gameState',
+            'playerPosition',
+            'lastActivity'
+        ];
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        // 4. すべての状態を初期化
         setGameId(null);
         setGameData(null);
         setMyPlayerState(null);
@@ -654,16 +681,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setExitVotes({});
         setHasVotedToExit(false);
         
-        // 3. デバッグモード関連の状態をリセット
+        // 5. デバッグモード関連の状態をリセット
         setDebugCurrentPlayerId(userId);
         setDebugPlayerStates({});
         setDebugMazeData({});
         
-        // 4. タイマーをクリア
-        if (personalTimerIntervalRef.current) {
-            clearInterval(personalTimerIntervalRef.current);
-            personalTimerIntervalRef.current = null;
-        }
+        // 6. クリーンアップフラグをリセット（短時間遅延）
+        setTimeout(() => {
+            setIsCleaningUp(false);
+        }, 500);
         
         console.log("✅ [StateReset] All states reset to initial values");
     };
@@ -823,12 +849,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     }, [isMyStandardTurn]);
 
+    // クリーンアップフラグを追加
+    const [isCleaningUp, setIsCleaningUp] = useState(false);
+
     // ゲームデータを読み込む useEffect を修正
     useEffect(() => {
-        if (!gameId) {
+        if (!gameId || isCleaningUp) {
             const savedGameId = localStorage.getItem('labyrinthGameId');
             const savedGameType = localStorage.getItem('labyrinthGameType');
-            if (savedGameId && savedGameType) {
+            if (savedGameId && savedGameType && !isCleaningUp) {
                 setGameId(savedGameId);
                 setGameType(savedGameType);
                 return;
@@ -842,6 +871,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
         const unsubscribe = onSnapshot(gameDocRef,
             (docSnap) => {
+                if (isCleaningUp) return; // クリーンアップ中は処理しない
+                
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     console.log("Game data loaded:", data);
@@ -914,25 +945,32 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     }
                 } else {
                     console.error("Game document does not exist");
-                    setMessage("ゲームが見つかりません。ロビーに戻ります。");
+                    if (!isCleaningUp) {
+                        setMessage("ゲームが見つかりません。ロビーに戻ります。");
+                        setTimeout(() => {
+                            performCompleteStateReset();
+                            setScreen('lobby');
+                        }, 3000);
+                    }
+                }
+            },
+            (error) => {
+                console.error("Error loading game data:", error);
+                if (!isCleaningUp) {
+                    setMessage("ゲームデータの読み込みに失敗しました。ロビーに戻ります。");
                     setTimeout(() => {
                         performCompleteStateReset();
                         setScreen('lobby');
                     }, 3000);
                 }
-            },
-            (error) => {
-                console.error("Error loading game data:", error);
-                setMessage("ゲームデータの読み込みに失敗しました。ロビーに戻ります。");
-                setTimeout(() => {
-                    performCompleteStateReset();
-                    setScreen('lobby');
-                }, 3000);
             }
         );
         
-        return () => unsubscribe();
-    }, [gameId, userId, setScreen]);
+        return () => {
+            console.log("🔄 [Cleanup] Unsubscribing game data listener");
+            unsubscribe();
+        };
+    }, [gameId, userId, setScreen, isCleaningUp]); // isCleaningUpを依存関係に追加
 
     // handleCellClickForMove関数の追加
     const handleCellClickForMove = (r, c) => {
@@ -957,21 +995,30 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
     // チャットメッセージを読み込む useEffect を追加
     useEffect(() => {
-        if (!gameId || !appId) return;
+        if (!gameId || !appId || isCleaningUp) return;
         
         const chatCollRef = collection(db, `artifacts/${appId}/public/data/labyrinthGames/${gameId}/chatMessages`);
         const chatQuery = query(chatCollRef, orderBy('timestamp', 'asc'), limit(50));
         
         const unsubscribe = onSnapshot(chatQuery, (snapshot) => {
+            if (isCleaningUp) return; // クリーンアップ中は処理しない
+            
             const messages = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
             setChatMessages(messages);
+        }, (error) => {
+            if (!isCleaningUp) {
+                console.error("Error loading chat messages:", error);
+            }
         });
         
-        return () => unsubscribe();
-    }, [gameId, appId]);
+        return () => {
+            console.log("🔄 [Cleanup] Unsubscribing chat listener");
+            unsubscribe();
+        };
+    }, [gameId, appId, isCleaningUp]);
 
     // ゲーム終了・ゴール達成監視
     useEffect(() => {
