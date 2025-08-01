@@ -2072,26 +2072,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                             : [] // 他人の迷路は壁を表示しない
                                                     }}
                                                     playerPosition={null}
-                                                    otherPlayers={(() => {
-                                                        // 表示中の迷路を攻略しているプレイヤーを表示
-                                                        if (!gameData?.players || !gameData?.playerStates) return [];
-                                                        
-                                                        return gameData.players
-                                                            .filter(playerId => playerId !== viewingMazeOwnerId) // 迷路作成者以外
-                                                            .map(playerId => {
-                                                                const playerState = gameData.playerStates[playerId];
-                                                                // 現在表示中の迷路を攻略している場合
-                                                                if (playerState?.assignedMazeOwnerId === viewingMazeOwnerId) {
-                                                                    return {
-                                                                        id: playerId,
-                                                                        position: playerState.position,
-                                                                        name: getUserNameById(playerId)
-                                                                    };
-                                                                }
-                                                                return null;
-                                                            })
-                                                            .filter(player => player !== null);
-                                                    })()}
+                                                    otherPlayers={[]} // 右側の迷路では他プレイヤーの現在地を表示しない
                                                     showAllWalls={viewingMazeOwnerId === effectiveUserId} // 自分の迷路のみ壁を表示
                                                     onCellClick={() => {}}
                                                     gridSize={currentGridSize}
@@ -2109,7 +2090,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             {viewingMazeOwnerId === effectiveUserId ? (
                                                 <p className="text-blue-600">全ての壁とスタート・ゴールが表示されています</p>
                                             ) : (
-                                                <p className="text-blue-600">スタートとゴールのみ表示されています</p>
+                                                <p className="text-blue-600">スタートとゴールのみ表示されています（現在地は非表示）</p>
                                             )}
                                         </div>
                                     </div>
@@ -2139,26 +2120,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                         walls: ((debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData)?.walls || []).filter(w => w.active === true)
                                                     }}
                                                     playerPosition={null} // 自分の迷路なので自分の位置は表示しない
-                                                    otherPlayers={(() => {
-                                                        // 現在選択中のプレイヤー（デバッグモード考慮）の迷路を攻略している相手を探す
-                                                        if (!gameData?.players || !gameData?.playerStates) return [];
-                                                        
-                                                        return gameData.players
-                                                            .filter(playerId => playerId !== effectiveUserId) // 現在のプレイヤー以外
-                                                            .map(playerId => {
-                                                                const playerState = gameData.playerStates[playerId];
-                                                                // 相手が現在のプレイヤーの迷路を攻略している場合
-                                                                if (playerState?.assignedMazeOwnerId === effectiveUserId) {
-                                                                    return {
-                                                                        id: playerId,
-                                                                        position: playerState.position,
-                                                                        name: getUserNameById(playerId)
-                                                                    };
-                                                                }
-                                                                return null;
-                                                            })
-                                                            .filter(player => player !== null); // nullを除外
-                                                    })()} // 現在のプレイヤーの迷路を攻略している相手の位置を表示
+                                                    otherPlayers={[]} // 右側の迷路では他プレイヤーの現在地を表示しない
                                                     showAllWalls={true}
                                                     onCellClick={() => {}}
                                                     gridSize={currentGridSize}
