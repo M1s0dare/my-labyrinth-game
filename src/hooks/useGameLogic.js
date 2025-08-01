@@ -157,11 +157,21 @@ export const useGameLogic = (gameId, gameData, gameType, userId, mazeToPlayData,
                     player1: actualUserId,
                     player2: battleOpponent,
                     startTime: serverTimestamp(),
-                    status: 'betting'
+                    status: 'betting',
+                    participants: [actualUserId, battleOpponent]
                 };
                 
-                sendSystemChatMessage(`${actualUserId.substring(0,8)}...と${battleOpponent.substring(0,8)}...でバトルが発生しました！`);
-                setMessage("バトル発生！ポイントを賭けてください。");
+                // 全員への通知メッセージ
+                const player1Name = actualUserId === userId ? "あなた" : `プレイヤー${actualUserId.substring(0,8)}...`;
+                const player2Name = battleOpponent === userId ? "あなた" : `プレイヤー${battleOpponent.substring(0,8)}...`;
+                await sendSystemChatMessage(`🔥 バトル発生！ ${player1Name} vs ${player2Name}`);
+                
+                // 当事者の場合のメッセージ
+                if (actualUserId === userId || battleOpponent === userId) {
+                    setMessage("🔥 バトル発生！ポイントを賭けてください。");
+                } else {
+                    setMessage("⚔️ バトルが発生しました。結果をお待ちください。");
+                }
             }
             
             // デバッグモード時は自動的にターン切り替え

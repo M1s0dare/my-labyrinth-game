@@ -42,7 +42,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [chatInput, setChatInput] = useState("");
     const chatLogRef = useRef(null);
     const [isBattleModalOpen, setIsBattleModalOpen] = useState(false);
-    const [battleOpponentId, setBattleOpponentId] = useState("");
     const [gameType, setGameType] = useState('standard');
     const [phaseTimeLeft, setPhaseTimeLeft] = useState(null);
     const [overallTimeLeft, setOverallTimeLeft] = useState(null);
@@ -402,7 +401,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 sendSystemChatMessage(`${myName}と${opponentName}でバトルが発生しました！`);
                 
                 // バトルモーダルを開く
-                setBattleOpponentId(battleOpponent);
                 setIsBattleModalOpen(true);
                 setMessage("バトル発生！ポイントを賭けてください。");
             }
@@ -433,15 +431,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     };
 
     const handleStandardBattleBet = async (betAmount) => {
-        if (!gameData?.activeBattle || !battleOpponentId) return;
+        if (!gameData?.activeBattle) return;
         
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
             
             // 自分の賭けポイントを記録
             const updates = {
-                [`playerStates.${effectiveUserId}.battleBet`]: betAmount,
-                [`playerStates.${effectiveUserId}.score`]: increment(-betAmount) // 賭けたポイントを減らす
+                [`playerStates.${userId}.battleBet`]: betAmount,
+                [`playerStates.${userId}.score`]: increment(-betAmount) // 賭けたポイントを減らす
             };
             
             await updateDoc(gameDocRef, updates);
@@ -449,52 +447,42 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             setIsBattleModalOpen(false);
             setMessage("ポイントを賭けました。相手の入力を待っています...");
             
-            // 相手も賭けているかチェック
-            setTimeout(() => {
-                checkBattleReady();
-            }, 1000);
-            
         } catch (error) {
             console.error("Error placing battle bet:", error);
             setMessage("賭けに失敗しました。");
         }
     };
 
-    // バトル準備完了チェック
-    const checkBattleReady = async () => {
-        if (!gameData?.activeBattle || !battleOpponentId) return;
-        
-        const myBet = gameData.playerStates[effectiveUserId]?.battleBet;
-        const opponentBet = gameData.playerStates[battleOpponentId]?.battleBet;
-        
-        if (myBet !== undefined && opponentBet !== undefined) {
-            // 両方が賭けた場合、バトル結果を処理
-            await processBattleResult(myBet, opponentBet);
-        }
-    };
-
     // バトル結果処理
-    const processBattleResult = async (myBet, opponentBet) => {
+    const processBattleResult = async (battle) => {
+        if (!battle || !battle.participants || battle.participants.length !== 2) return;
+        
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
+            const [player1, player2] = battle.participants;
+            const player1State = gameData.playerStates[player1];
+            const player2State = gameData.playerStates[player2];
+            
+            const player1Bet = player1State?.battleBet || 0;
+            const player2Bet = player2State?.battleBet || 0;
             
             let winner = null;
             let loser = null;
             
-            if (myBet > opponentBet) {
-                winner = effectiveUserId;
-                loser = battleOpponentId;
-            } else if (opponentBet > myBet) {
-                winner = battleOpponentId;
-                loser = effectiveUserId;
+            if (player1Bet > player2Bet) {
+                winner = player1;
+                loser = player2;
+            } else if (player2Bet > player1Bet) {
+                winner = player2;
+                loser = player1;
             } // 同じ場合は引き分け
             
             const updates = {
                 // バトル状態をクリア
-                [`playerStates.${effectiveUserId}.inBattleWith`]: null,
-                [`playerStates.${battleOpponentId}.inBattleWith`]: null,
-                [`playerStates.${effectiveUserId}.battleBet`]: null,
-                [`playerStates.${battleOpponentId}.battleBet`]: null,
+                [`playerStates.${player1}.inBattleWith`]: null,
+                [`playerStates.${player2}.inBattleWith`]: null,
+                [`playerStates.${player1}.battleBet`]: null,
+                [`playerStates.${player2}.battleBet`]: null,
                 activeBattle: null
             };
             
@@ -504,21 +492,30 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 // 敗者に1ターン行動不能状態を付与
                 updates[`playerStates.${loser}.skipNextTurn`] = true;
                 
-                const winnerName = winner === effectiveUserId ? currentUserName : getUserNameById(battleOpponentId);
-                setMessage(`バトル結果: ${winnerName}の勝利！ (${myBet} vs ${opponentBet})`);
+                const winnerName = getUserNameById(winner);
+                const loserName = getUserNameById(loser);
                 
-                // オープンチャットに結果を通知
-                const systemWinnerName = getUserNameById(winner);
-                sendSystemChatMessage(`勝者は${systemWinnerName}です！`);
+                // 全員にバトル結果を通知
+                await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！ (${player1Bet} vs ${player2Bet})`);
+                await sendSystemChatMessage(`💀 ${loserName}は次のターン行動不能になります。`);
+                
+                // 個人メッセージ
+                if (winner === userId) {
+                    setMessage(`🏆 バトル勝利！ +5pt (${player1Bet} vs ${player2Bet})`);
+                } else if (loser === userId) {
+                    setMessage(`💀 バトル敗北... 次のターン行動不能 (${player1Bet} vs ${player2Bet})`);
+                } else {
+                    setMessage(`⚔️ バトル終了: ${winnerName}の勝利`);
+                }
             } else {
-                setMessage(`バトル結果: 引き分け (${myBet} vs ${opponentBet})`);
-                sendSystemChatMessage("バトルは引き分けでした。");
+                await sendSystemChatMessage(`🤝 バトル結果: 引き分け (${player1Bet} vs ${player2Bet})`);
+                setMessage(`🤝 バトル引き分け (${player1Bet} vs ${player2Bet})`);
             }
             
             await updateDoc(gameDocRef, updates);
             
             // バトル関連状態をリセット
-            setBattleOpponentId("");
+            setIsBattleModalOpen(false);
             
         } catch (error) {
             console.error("Error processing battle result:", error);
@@ -612,7 +609,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setChatMessages([]);
         setChatInput("");
         setIsBattleModalOpen(false);
-        setBattleOpponentId("");
         setGameType('standard');
         setPhaseTimeLeft(null);
         setOverallTimeLeft(null);
@@ -1455,16 +1451,27 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
     // バトル状態監視
     useEffect(() => {
-        if (gameData?.activeBattle && battleOpponentId) {
-            const myBet = gameData.playerStates[effectiveUserId]?.battleBet;
-            const opponentBet = gameData.playerStates[battleOpponentId]?.battleBet;
+        if (gameData?.activeBattle && gameData?.mode === '4player') {
+            const battle = gameData.activeBattle;
+            const isParticipant = battle.participants?.includes(userId);
             
-            if (myBet !== undefined && opponentBet !== undefined) {
-                // 両方が賭けた場合、バトル結果を処理
-                processBattleResult(myBet, opponentBet);
+            // 当事者の場合：バトルモーダルを表示
+            if (isParticipant && !isBattleModalOpen && battle.status === 'betting') {
+                setIsBattleModalOpen(true);
+            }
+            
+            // 全当事者が賭けを完了した場合、結果を処理
+            if (battle.status === 'betting') {
+                const allParticipantsBetted = battle.participants?.every(pid => 
+                    gameData.playerStates[pid]?.battleBet !== undefined
+                );
+                
+                if (allParticipantsBetted) {
+                    processBattleResult(battle);
+                }
             }
         }
-    }, [gameData?.playerStates, battleOpponentId, effectiveUserId]);
+    }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen]);
 
     // handleSendChatMessage関数の実装
     const handleSendChatMessage = async () => {
@@ -1885,7 +1892,25 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                             
                             <h4 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3">移動操作</h4>
                             
-                            {isMyStandardTurn && !inStandardBattleBetting ? (
+                            {/* バトル待機状態の表示 */}
+                            {gameData?.activeBattle && gameData?.mode === '4player' && !gameData.activeBattle.participants?.includes(userId) ? (
+                                <div className="text-center p-4 bg-orange-50 rounded-lg">
+                                    <div className="flex items-center justify-center mb-2">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600"></div>
+                                    </div>
+                                    <p className="text-orange-600 font-semibold">⚔️ バトル進行中</p>
+                                    <p className="text-sm text-orange-500">
+                                        {(() => {
+                                            const participants = gameData.activeBattle.participants || [];
+                                            const names = participants.map(pid => getUserNameById(pid)).join(" vs ");
+                                            return `${names}のバトル結果をお待ちください...`;
+                                        })()}
+                                    </p>
+                                    <div className="mt-2 text-xs text-orange-400">
+                                        両者の賭けが完了するまでお待ちください
+                                    </div>
+                                </div>
+                            ) : isMyStandardTurn && !inStandardBattleBetting ? (
                                 <div className="space-y-3">
                                     {/* ターン状態表示 */}
                                     <div className="p-3 bg-green-50 rounded-lg text-center">
@@ -2214,7 +2239,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     onClose={() => setIsBattleModalOpen(false)}
                     onBet={handleStandardBattleBet}
                     maxBet={effectivePlayerState?.score || 0}
-                    opponentName={battleOpponentId}
+                    opponentName={gameData?.activeBattle?.participants?.filter(id => id !== userId).map(id => getUserNameById(id)).join(', ') || "相手"}
                     myName={effectiveUserId}
                     myCurrentScore={effectivePlayerState?.score || 0}
                 />
