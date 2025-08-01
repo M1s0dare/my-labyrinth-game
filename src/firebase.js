@@ -5,7 +5,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, enableNetwork, disableNetwork } from 'firebase/firestore';
 
 // Firebase設定オブジェクト
 // プロジェクトごとに異なる設定値を含む
@@ -26,6 +26,10 @@ export const auth = getAuth(app);
 
 // Firestore データベースインスタンスを取得・エクスポート
 export const db = getFirestore(app);
+
+// ネットワーク制御関数をエクスポート
+export const enableFirestoreNetwork = () => enableNetwork(db);
+export const disableFirestoreNetwork = () => disableNetwork(db);
 
 // アプリケーションIDを設定からエクスポート
 export const appId = firebaseConfig.appId;

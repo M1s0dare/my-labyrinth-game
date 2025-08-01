@@ -106,8 +106,25 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         if (userId === effectiveUserId) {
             return currentUserName;
         }
-        // 他のプレイヤーのユーザー名を取得（実際の実装では、ゲームデータからプレイヤー名を取得）
-        return gameData?.playerStates?.[userId]?.playerName || getUsername() || `プレイヤー${userId.substring(0,8)}...`;
+        
+        // まずplayerStatesから取得を試行
+        if (gameData?.playerStates?.[userId]?.playerName) {
+            return gameData.playerStates[userId].playerName;
+        }
+        
+        // 次にplayerNamesマップから取得を試行
+        if (gameData?.playerNames && gameData.playerNames[userId]) {
+            return gameData.playerNames[userId];
+        }
+        
+        // デバッグプレイヤーの場合
+        if (userId.startsWith('debug_player')) {
+            const playerNumber = userId.charAt(12) || userId.split('_')[2];
+            return `デバッグプレイヤー${playerNumber}`;
+        }
+        
+        // フォールバック：Firebase IDの一部を表示
+        return `プレイヤー${userId.substring(0,8)}...`;
     };
 
     // 追加: 不足している変数の定義

@@ -3,7 +3,7 @@
  * プレイヤーが迷路を作成し、スタート・ゴール位置を設定する画面
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, doc, getDoc, updateDoc, serverTimestamp, Timestamp, onSnapshot } from 'firebase/firestore';
 import { CheckCircle, XCircle, Clock } from 'lucide-react';
 import { db, appId } from '../firebase';
@@ -18,7 +18,7 @@ import { createInitialWallStates, isPathPossible, shuffleArray, formatTime, getU
  * @param {string} gameMode - ゲームモード（2player or 4player）
  * @param {boolean} debugMode - デバッグモードのON/OFF
  */
-const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
+const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode, isOnline }) => {
     // === 状態管理 ===
     const [gameId, setGameId] = useState(null);              // 現在のゲームID
     const [gameData, setGameData] = useState(null);          // ゲームデータ
@@ -33,17 +33,40 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [settingMode, setSettingMode] = useState('wall');  // 設定モード（wall/start/goal）
     const [message, setMessage] = useState(`壁を${WALL_COUNT}本設置し、S/Gを設定してください。`);  // メッセージ
     const [creationTimeLeft, setCreationTimeLeft] = useState(null);  // 作成残り時間
+    const [connectionStatus, setConnectionStatus] = useState('connected'); // 接続状態
+    const [lastSyncTime, setLastSyncTime] = useState(Date.now()); // 最後の同期時刻
 
     // ユーザー名を取得
     const currentUserName = getUsername() || "未設定ユーザー";
+
+    // リアルタイムリスナーの参照を保持
+    const listenerRef = useRef(null);
+    const syncTimeoutRef = useRef(null);
 
     // ユーザーIDからユーザー名を取得するヘルパー関数
     const getUserNameById = (playerId) => {
         if (playerId === userId) {
             return currentUserName;
         }
-        // 他のプレイヤーのユーザー名を取得（ゲームデータのplayerStatesから取得、またはフォールバック）
-        return gameData?.playerStates?.[playerId]?.playerName || `プレイヤー${playerId.substring(0,8)}...`;
+        
+        // まずゲームデータのplayerNamesマップから取得を試行
+        if (gameData?.playerNames && gameData.playerNames[playerId]) {
+            return gameData.playerNames[playerId];
+        }
+        
+        // 次にplayerStatesから取得を試行（ゲーム開始後）
+        if (gameData?.playerStates?.[playerId]?.playerName) {
+            return gameData.playerStates[playerId].playerName;
+        }
+        
+        // デバッグプレイヤーの場合
+        if (playerId.startsWith('debug_player')) {
+            const playerNumber = playerId.charAt(12) || playerId.split('_')[2];
+            return `デバッグプレイヤー${playerNumber}`;
+        }
+        
+        // フォールバック：Firebase IDの一部を表示
+        return `プレイヤー${playerId.substring(0,8)}...`;
     };
 
     // === 初期化処理 ===
@@ -87,74 +110,136 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     useEffect(() => {
         if (!gameId || !userId) return;
         
-        console.log("🔗 [CourseCreation] Setting up real-time listener for game:", gameId);
+        console.log("🔗 [CourseCreation] Setting up enhanced real-time listener for game:", gameId);
         
         const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
-        const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                console.log("📱 [CourseCreation] Game data updated:", {
-                    status: data.status,
-                    players: data.players,
-                    currentUserIncluded: data.players?.includes(userId),
-                    mazesCount: Object.keys(data.mazes || {}).length
+        
+        // 強化されたリアルタイムリスナー（メタデータ変更も含む）
+        const unsubscribe = onSnapshot(gameDocRef, 
+            {
+                includeMetadataChanges: true, // サーバーとローカルキャッシュの両方の変更を監視
+            },
+            (docSnap) => {
+                const now = Date.now();
+                const source = docSnap.metadata.fromCache ? "cache" : "server";
+                const hasPendingWrites = docSnap.metadata.hasPendingWrites;
+                
+                console.log(`📱 [CourseCreation] Game data updated from ${source}:`, {
+                    gameId: gameId.substring(0, 8),
+                    userId: userId.substring(0, 8),
+                    timestamp: new Date().toISOString(),
+                    source,
+                    hasPendingWrites,
+                    exists: docSnap.exists()
                 });
                 
-                setGameData(data);
-                const newGameType = data.gameType || 'standard';
-                if (gameType !== newGameType) setGameType(newGameType); // Update gameType based on Firestore
+                // 接続状態を更新
+                if (source === "server") {
+                    setConnectionStatus('connected');
+                    setLastSyncTime(now);
+                    // 同期タイムアウトをクリア
+                    if (syncTimeoutRef.current) {
+                        clearTimeout(syncTimeoutRef.current);
+                        syncTimeoutRef.current = null;
+                    }
+                } else if (source === "cache") {
+                    setConnectionStatus('cached');
+                    // サーバーからの応答を一定時間待つ
+                    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+                    syncTimeoutRef.current = setTimeout(() => {
+                        if (Date.now() - lastSyncTime > 10000) { // 10秒以上サーバーからの更新がない
+                            setConnectionStatus('disconnected');
+                        }
+                    }, 10000);
+                }
+                
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    
+                    // より詳細なログ出力
+                    console.log("� [CourseCreation] Detailed game state:", {
+                        status: data.status,
+                        players: data.players,
+                        playerCount: data.players?.length || 0,
+                        currentUserIncluded: data.players?.includes(userId),
+                        mazesCount: Object.keys(data.mazes || {}).length,
+                        mazeOwners: Object.keys(data.mazes || {}),
+                        lastUpdated: data.lastUpdated?.toDate()?.toISOString(),
+                        source,
+                        hasPendingWrites
+                    });
+                    
+                    // サーバーからのデータのみを状態に反映（ローカルキャッシュは無視）
+                    if (source === "server" || !hasPendingWrites) {
+                        setGameData(data);
+                        const newGameType = data.gameType || 'standard';
+                        if (gameType !== newGameType) setGameType(newGameType);
 
-                // ゲーム状態が無効な場合はロビーに戻る
-                if (data.status === 'abandoned' || data.status === 'disbanded') {
-                    console.log("⚠️ [CourseCreation] Game was abandoned/disbanded, returning to lobby");
-                    setMessage("ゲームが解散されました。ロビーに戻ります。");
+                        // ゲーム状態が無効な場合はロビーに戻る
+                        if (data.status === 'abandoned' || data.status === 'disbanded') {
+                            console.log("⚠️ [CourseCreation] Game was abandoned/disbanded, returning to lobby");
+                            setMessage("ゲームが解散されました。ロビーに戻ります。");
+                            localStorage.removeItem('labyrinthGameId');
+                            localStorage.removeItem('labyrinthGameType');
+                            setTimeout(() => setScreen('lobby'), 2000);
+                            return;
+                        }
+
+                        // 現在のユーザーがプレイヤーリストに含まれていない場合
+                        if (!data.players || !data.players.includes(userId)) {
+                            console.log("⚠️ [CourseCreation] Current user not in players list, returning to lobby");
+                            setMessage("プレイヤーリストから除外されました。ロビーに戻ります。");
+                            localStorage.removeItem('labyrinthGameId');
+                            localStorage.removeItem('labyrinthGameType');
+                            setTimeout(() => setScreen('lobby'), 2000);
+                            return;
+                        }
+
+                        if (data.status === "playing" || (newGameType === 'extra' && data.currentExtraModePhase && data.currentExtraModePhase !== "mazeCreation")) {
+                            setScreen('play');
+                        }
+                        
+                        if (data.mazes && data.mazes[userId]) {
+                            setMessage("迷路送信済。他プレイヤー待機中...");
+                            const submittedMaze = data.mazes[userId];
+                            const mazeGridSize = submittedMaze.gridSize || (newGameType === 'extra' ? EXTRA_GRID_SIZE : STANDARD_GRID_SIZE);
+                            if(submittedMaze.allWallsConfiguration) setMyMazeWalls(submittedMaze.allWallsConfiguration);
+                            else setMyMazeWalls(createInitialWallStates(mazeGridSize));
+                            if(submittedMaze.start) setStartPos(submittedMaze.start);
+                            if(submittedMaze.goal) setGoalPos(submittedMaze.goal);
+                        } else if (data.status === 'creating') {
+                            updateMessage(myMazeWalls, startPos, goalPos, newGameType === 'extra' ? EXTRA_GRID_SIZE : STANDARD_GRID_SIZE);
+                        }
+                    }
+                } else {
+                    console.log("❌ [CourseCreation] Game document does not exist");
+                    setMessage("ゲームデータが見つかりません。ロビーに戻ります。");
                     localStorage.removeItem('labyrinthGameId');
                     localStorage.removeItem('labyrinthGameType');
                     setTimeout(() => setScreen('lobby'), 2000);
-                    return;
                 }
-
-                // 現在のユーザーがプレイヤーリストに含まれていない場合
-                if (!data.players || !data.players.includes(userId)) {
-                    console.log("⚠️ [CourseCreation] Current user not in players list, returning to lobby");
-                    setMessage("プレイヤーリストから除外されました。ロビーに戻ります。");
-                    localStorage.removeItem('labyrinthGameId');
-                    localStorage.removeItem('labyrinthGameType');
-                    setTimeout(() => setScreen('lobby'), 2000);
-                    return;
-                }
-
-                if (data.status === "playing" || (newGameType === 'extra' && data.currentExtraModePhase && data.currentExtraModePhase !== "mazeCreation")) {
-                    setScreen('play');
-                }
-                if (data.mazes && data.mazes[userId]) {
-                    setMessage("迷路送信済。他プレイヤー待機中...");
-                    const submittedMaze = data.mazes[userId];
-                    // Ensure gridSize matches the submitted maze's gridSize or the current gameType
-                    const mazeGridSize = submittedMaze.gridSize || (newGameType === 'extra' ? EXTRA_GRID_SIZE : STANDARD_GRID_SIZE);
-                    if(submittedMaze.allWallsConfiguration) setMyMazeWalls(submittedMaze.allWallsConfiguration);
-                    else setMyMazeWalls(createInitialWallStates(mazeGridSize)); // Fallback if not saved
-                    if(submittedMaze.start) setStartPos(submittedMaze.start);
-                    if(submittedMaze.goal) setGoalPos(submittedMaze.goal);
-                } else if (data.status === 'creating') {
-                     updateMessage(myMazeWalls, startPos, goalPos, newGameType === 'extra' ? EXTRA_GRID_SIZE : STANDARD_GRID_SIZE);
-                }
-            } else {
-                console.log("❌ [CourseCreation] Game document does not exist");
-                setMessage("ゲームデータが見つかりません。ロビーに戻ります。");
-                localStorage.removeItem('labyrinthGameId');
-                localStorage.removeItem('labyrinthGameType');
-                setTimeout(() => setScreen('lobby'), 2000);
+            },
+            (error) => {
+                console.error("❌ [CourseCreation] Error in real-time listener:", error);
+                setConnectionStatus('error');
+                setMessage("接続エラーが発生しました。ページをリロードしてください。");
             }
-        }, (error) => {
-            console.error("❌ [CourseCreation] Error in real-time listener:", error);
-            setMessage("接続エラーが発生しました。ページをリロードしてください。");
-        });
+        );
+        
+        listenerRef.current = unsubscribe;
+        
         return () => {
             console.log("🔌 [CourseCreation] Unsubscribing from real-time listener");
-            unsubscribe();
+            if (listenerRef.current) {
+                listenerRef.current();
+                listenerRef.current = null;
+            }
+            if (syncTimeoutRef.current) {
+                clearTimeout(syncTimeoutRef.current);
+                syncTimeoutRef.current = null;
+            }
         };
-    }, [gameId, userId, setScreen, myMazeWalls, startPos, goalPos, gameType]); // Added gameType to dependencies for updateMessage
+    }, [gameId, userId, setScreen]); // 依存関係を最小限に減らす
 
     const updateMessage = (newWalls = myMazeWalls, newStart = startPos, newGoal = goalPos, gridSizeToUse = currentGridSize) => {
         const activeWallsCount = newWalls.filter(w => w.active).length;
@@ -346,6 +431,19 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         secretObjective.progress = 0; // Initialize progress for counter objectives
                     }
 
+                    // プレイヤー名を確実に取得
+                    let playerName;
+                    if (pid === userId) {
+                        playerName = currentUserName;
+                    } else if (currentData.playerNames && currentData.playerNames[pid]) {
+                        playerName = currentData.playerNames[pid];
+                    } else if (pid.startsWith('debug_player')) {
+                        const playerNumber = pid.charAt(12) || pid.split('_')[2];
+                        playerName = `デバッグプレイヤー${playerNumber}`;
+                    } else {
+                        playerName = `プレイヤー${pid.substring(0,8)}...`;
+                    }
+
                     newPlayerStates[pid] = {
                         assignedMazeOwnerId: assignedMazeOwnerId,
                         myOriginalMazeOwnerId: pid, // For displaying their own maze later
@@ -361,7 +459,7 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         sharedDataFromAllies: { walls: [], scoutLogs: [] }, // Extra mode
                         temporaryPriorityBoost: 0, // Extra mode
                         betrayedAllies: [], // Extra mode for SAB_BETRAY_AND_WIN
-                        playerName: pid === userId ? currentUserName : (pid.startsWith('debug_player') ? `デバッグプレイヤー${pid.charAt(12)}` : `プレイヤー${pid.substring(0,8)}...`) // プレイヤー名を保存
+                        playerName: playerName // プレイヤー名を保存
                     };
                 });
 
@@ -410,6 +508,26 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             </div>
             {gameId && <p className="text-sm text-slate-600 mb-1">ゲームID: {gameId.substring(0,8)}...</p>}
             {userId && <p className="text-sm text-slate-600 mb-1">あなた: {currentUserName} ({gameMode})</p>}
+            
+            {/* 接続状態表示 */}
+            <div className="mb-2 flex items-center justify-center space-x-2">
+                <div className={`w-3 h-3 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500' :
+                    connectionStatus === 'cached' ? 'bg-yellow-500' :
+                    connectionStatus === 'disconnected' ? 'bg-red-500' :
+                    'bg-gray-500'
+                }`}></div>
+                <span className="text-xs text-slate-600">
+                    {connectionStatus === 'connected' ? 'リアルタイム同期中' :
+                     connectionStatus === 'cached' ? 'キャッシュから表示中' :
+                     connectionStatus === 'disconnected' ? '接続に問題があります' :
+                     '接続エラー'}
+                </span>
+                <span className="text-xs text-slate-400">
+                    (最終同期: {new Date(lastSyncTime).toLocaleTimeString()})
+                </span>
+            </div>
+            
             {gameType === 'extra' && creationTimeLeft !== null && 
                 <p className="text-lg font-semibold text-red-600 mb-2">
                     <Clock size={20} className="inline mr-1"/> 残り時間: {formatTime(creationTimeLeft)}

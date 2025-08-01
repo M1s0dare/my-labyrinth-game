@@ -18,7 +18,7 @@ import { HelpOverlay } from './HelpOverlay';
  * @param {string} userId - 現在のユーザーID
  * @param {boolean} debugMode - デバッグモードのON/OFF
  */
-const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
+const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode, isOnline }) => {
     // ユーザーネーム関連の状態
     const [username, setUsername] = useState('');
     const [showUsernameInput, setShowUsernameInput] = useState(false);
@@ -176,10 +176,31 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
                         await updateDoc(doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameIdToJoin), {
                             players: arrayUnion(userId),
                             status: gameData.players.length + 1 === requiredPlayerCount ? "creating" : "waiting",
-                            lastUpdated: serverTimestamp()
+                            lastUpdated: serverTimestamp(),
+                            joinedAt: serverTimestamp(), // 参加時刻を記録
+                            [`playerNames.${userId}`]: username // プレイヤー名をマップとして保存
                         });
                         
                         console.log("✅ [DEBUG] Successfully joined game. New status:", gameData.players.length + 1 === requiredPlayerCount ? "creating" : "waiting");
+                        
+                        // 参加後、少し待ってからサーバーの状態を確認
+                        setTimeout(async () => {
+                            try {
+                                const updatedDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameIdToJoin));
+                                if (updatedDoc.exists()) {
+                                    const updatedData = updatedDoc.data();
+                                    console.log("🔍 [DEBUG] Game state after join:", {
+                                        id: gameIdToJoin,
+                                        players: updatedData.players,
+                                        playerCount: updatedData.players.length,
+                                        status: updatedData.status,
+                                        currentUserIncluded: updatedData.players.includes(userId)
+                                    });
+                                }
+                            } catch (error) {
+                                console.error("❌ [DEBUG] Error verifying game state after join:", error);
+                            }
+                        }, 1000);
                         break;
                     }
                 }
@@ -209,6 +230,20 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
                     gameStatus = "waiting";
                 }
                 
+                // プレイヤー名マップを作成
+                const playerNames = {};
+                if (debugMode) {
+                    playerNames[userId] = username;
+                    // デバッグプレイヤーの名前も設定
+                    playersArray.forEach((pid, index) => {
+                        if (pid !== userId && pid.startsWith('debug_player')) {
+                            playerNames[pid] = `デバッグプレイヤー${index + 1}`;
+                        }
+                    });
+                } else {
+                    playerNames[userId] = username;
+                }
+                
                 const newGameData = {
                     mode: mode,
                     gameType: "standard", // エクストラモード削除により固定
@@ -225,6 +260,7 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
                     playerGoalOrder: [],
                     activeBattle: null,
                     chatMessagesLastFetch: null,
+                    playerNames: playerNames, // プレイヤー名マップを追加
                     // エクストラモード関連の項目を削除
                     debugMode: debugMode, // デバッグモードフラグを追加
                     version: Date.now() // バージョン管理用のタイムスタンプを追加
@@ -273,6 +309,14 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode }) => {
                 <p className="text-xl text-slate-300">心理戦迷路ゲーム</p>
                 {userId && <p className="text-sm text-slate-400 mt-2">ユーザーID: {userId.substring(0,12)}...</p>}
                 {username && <p className="text-sm text-slate-300 mt-1">プレイヤー名: {username}</p>}
+                
+                {/* ネットワーク状態表示 */}
+                <div className="mt-3 flex items-center justify-center space-x-2">
+                    <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className="text-xs text-slate-400">
+                        {isOnline ? 'オンライン' : 'オフライン'}
+                    </span>
+                </div>
             </header>
 
             {/* ユーザーネーム設定モーダル */}

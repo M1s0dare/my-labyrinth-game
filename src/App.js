@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { auth, db, appId } from './firebase';
+import { auth, db, appId, enableFirestoreNetwork, disableFirestoreNetwork } from './firebase';
 
 import LobbyScreen from './components/LobbyScreen';
 import CourseCreationScreen from './components/CourseCreationScreen';
@@ -24,6 +24,8 @@ function App() {
     const [gameMode, setGameMode] = useState('2player');
     // デバッグモードのON/OFFを管理
     const [debugMode, setDebugMode] = useState(false);
+    // ネットワーク状態を管理
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
 
     // === Firebase認証の初期化処理 ===
     useEffect(() => {
@@ -60,6 +62,47 @@ function App() {
             }
         };
         initAuth();
+    }, []);
+
+    // === ネットワーク状態の監視 ===
+    useEffect(() => {
+        const handleOnline = async () => {
+            console.log("🌐 [Network] Connection restored");
+            setIsOnline(true);
+            try {
+                await enableFirestoreNetwork();
+                console.log("✅ [Network] Firestore network enabled");
+            } catch (error) {
+                console.error("❌ [Network] Error enabling Firestore network:", error);
+            }
+        };
+
+        const handleOffline = async () => {
+            console.log("🌐 [Network] Connection lost");
+            setIsOnline(false);
+            try {
+                await disableFirestoreNetwork();
+                console.log("⚠️ [Network] Firestore network disabled");
+            } catch (error) {
+                console.error("❌ [Network] Error disabling Firestore network:", error);
+            }
+        };
+
+        // ネットワーク状態変更のイベントリスナーを追加
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        // 初期状態を設定
+        if (navigator.onLine) {
+            handleOnline();
+        } else {
+            handleOffline();
+        }
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
     }, []);
 
     // === 古いゲームデータのクリーンアップ処理 ===
@@ -299,14 +342,14 @@ function App() {
     switch (screen) {
         case 'courseCreation':
             // コース作成画面
-            return <CourseCreationScreen userId={userId} setScreen={setScreen} gameMode={gameMode} debugMode={debugMode} />;
+            return <CourseCreationScreen userId={userId} setScreen={setScreen} gameMode={gameMode} debugMode={debugMode} isOnline={isOnline} />;
         case 'play':
             // プレイ画面
-            return <PlayScreen userId={userId} setScreen={setScreen} gameMode={gameMode} debugMode={debugMode} />; 
+            return <PlayScreen userId={userId} setScreen={setScreen} gameMode={gameMode} debugMode={debugMode} isOnline={isOnline} />; 
         case 'lobby':
         default:
             // ロビー画面（デフォルト）
-            return <LobbyScreen setGameMode={setGameMode} setScreen={setScreen} userId={userId} debugMode={debugMode} />;
+            return <LobbyScreen setGameMode={setGameMode} setScreen={setScreen} userId={userId} debugMode={debugMode} isOnline={isOnline} />;
     }
 }
 
