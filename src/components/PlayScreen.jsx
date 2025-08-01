@@ -1963,8 +1963,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                 ...myCreatedMazeData,
                                                 walls: (myCreatedMazeData.walls || []).filter(w => w.active === true)
                                             }}
-                                            playerPosition={playerSolvingMyMaze?.position}
-                                            otherPlayers={playerSolvingMyMaze ? [playerSolvingMyMaze] : []}
+                                            playerPosition={null} // 自分の迷路なので自分の位置は表示しない
+                                            otherPlayers={playerSolvingMyMaze ? [{
+                                                id: playerSolvingMyMaze.id,
+                                                position: playerSolvingMyMaze.position,
+                                                name: getUserNameById(playerSolvingMyMaze.id)
+                                            }] : []} // 相手の位置をotherPlayersとして表示
                                             showAllWalls={true}
                                             onCellClick={() => {}}
                                             gridSize={currentGridSize}
