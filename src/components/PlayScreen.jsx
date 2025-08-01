@@ -1734,7 +1734,26 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         <MazeGrid
                                             mazeData={mazeToPlayData}
                                             playerPosition={effectivePlayerState?.position}
-                                            otherPlayers={[]} // 左の迷路では相手の位置を表示しない
+                                            otherPlayers={(() => {
+                                                // 相手プレイヤーの情報を取得
+                                                if (!gameData?.players || !gameData?.playerStates) return [];
+                                                
+                                                return gameData.players
+                                                    .filter(playerId => playerId !== effectiveUserId) // 自分以外
+                                                    .map(playerId => {
+                                                        const playerState = gameData.playerStates[playerId];
+                                                        // 相手が同じ迷路を攻略している場合（同じ迷路作成者に割り当てられている）
+                                                        if (playerState?.assignedMazeOwnerId === effectivePlayerState?.assignedMazeOwnerId) {
+                                                            return {
+                                                                id: playerId,
+                                                                position: playerState.position,
+                                                                name: getUserNameById(playerId)
+                                                            };
+                                                        }
+                                                        return null;
+                                                    })
+                                                    .filter(player => player !== null); // nullを除外
+                                            })()} // 相手が同じ迷路を攻略している場合は相手の位置も表示
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
                                             onCellClick={handleCellClick}
@@ -1742,7 +1761,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             sharedWallsFromAllies={sharedWalls}
                                             highlightPlayer={true}
                                             smallView={false}
-                                            showAllPlayerPositions={false} // 左の迷路では相手位置を表示しない
+                                            showAllPlayerPositions={false}
                                             isCreating={false}
                                             showAllWalls={debugMode && showOpponentWallsDebug} // デバッグモード時の壁表示
                                         />
