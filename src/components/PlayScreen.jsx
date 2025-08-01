@@ -509,7 +509,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     };
 
-    // ゲーム解散処理
+    // ゲーム解散処理（完全リセット機能付き）
     const handleGameExit = async () => {
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
@@ -556,13 +556,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 console.log("✅ [GameExit] Game data updated, player removed");
             }
             
-            // 2. ローカルストレージをクリア
-            localStorage.removeItem('labyrinthGameId');
-            localStorage.removeItem('labyrinthGameType');
-            localStorage.removeItem('currentUserName'); // ユーザー名もクリア
-            localStorage.removeItem('userId'); // ユーザーIDもクリア
+            // 2. 完全な状態リセット（ローカル状態とストレージを完全クリア）
+            performCompleteStateReset();
             
-            console.log("✅ [GameExit] Local storage cleared");
+            console.log("✅ [GameExit] Complete state reset performed");
             
             // 3. ロビーに戻る
             setScreen('lobby');
@@ -570,10 +567,75 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         } catch (error) {
             console.error("❌ [GameExit] Error during game exit:", error);
             setMessage("ゲーム退出処理に失敗しました。");
+            // エラーが発生してもリセットは実行
+            performCompleteStateReset();
+            setScreen('lobby');
         }
     };
 
-    // ホームに戻る確認処理
+    // 完全な状態リセット処理
+    const performCompleteStateReset = () => {
+        console.log("🧹 [StateReset] Performing complete state reset");
+        
+        // 1. ローカルストレージを完全クリア
+        localStorage.removeItem('labyrinthGameId');
+        localStorage.removeItem('labyrinthGameType');
+        localStorage.removeItem('currentUserName');
+        localStorage.removeItem('userId');
+        
+        // 2. すべての状態を初期化
+        setGameId(null);
+        setGameData(null);
+        setMyPlayerState(null);
+        setMazeToPlayData(null);
+        setMyCreatedMazeData(null);
+        setPlayerSolvingMyMaze(null);
+        setMessage("ゲーム開始！");
+        setShowOpponentWallsDebug(false);
+        setChatMessages([]);
+        setChatInput("");
+        setIsBattleModalOpen(false);
+        setBattleOpponentId("");
+        setGameType('standard');
+        setPhaseTimeLeft(null);
+        setOverallTimeLeft(null);
+        setSelectedAction(null);
+        setActionTarget(null);
+        setSabotageType(null);
+        setNegotiationDetails({ type: null, duration: null, conditions: ""});
+        setShowActionDetails(false);
+        setTrapPlacementCoord(null);
+        setIsPlacingTrap(false);
+        setSharedWalls([]);
+        setSharedScoutLogs([]);
+        setIsGameOverModalOpen(false);
+        setSelectedMoveTarget(null);
+        setIsSelectingMoveTarget(false);
+        setShowHelpOverlay(false);
+        setShowSpeechTemplate(false);
+        setShowReviewMode(false);
+        setShowResultModal(false);
+        setResultData(null);
+        setIsMoving(false);
+        setHitWalls([]);
+        setCanPressButton(true);
+        setShowExitConfirmDialog(false);
+        
+        // 3. デバッグモード関連の状態をリセット
+        setDebugCurrentPlayerId(userId);
+        setDebugPlayerStates({});
+        setDebugMazeData({});
+        
+        // 4. タイマーをクリア
+        if (personalTimerIntervalRef.current) {
+            clearInterval(personalTimerIntervalRef.current);
+            personalTimerIntervalRef.current = null;
+        }
+        
+        console.log("✅ [StateReset] All states reset to initial values");
+    };
+
+    // ホームに戻る確認処理（完全リセット付き）
     const handleExitConfirm = () => {
         setShowExitConfirmDialog(false);
         handleGameExit();
@@ -582,6 +644,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // ホームに戻るボタンのクリック処理
     const handleExitButtonClick = () => {
         setShowExitConfirmDialog(true);
+    };
+
+    // 緊急時の強制リセット処理（エラー発生時などに使用）
+    const handleForceReset = () => {
+        console.log("🚨 [ForceReset] Emergency reset triggered");
+        performCompleteStateReset();
+        setScreen('lobby');
     };
 
     // handleTrapCoordinateSelect関数の追加
@@ -676,6 +745,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 setGameType(savedGameType);
                 return;
             } else {
+                performCompleteStateReset();
                 setScreen('lobby');
                 return;
             }
@@ -757,13 +827,19 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 } else {
                     console.error("Game document does not exist");
                     setMessage("ゲームが見つかりません。ロビーに戻ります。");
-                    setTimeout(() => setScreen('lobby'), 3000);
+                    setTimeout(() => {
+                        performCompleteStateReset();
+                        setScreen('lobby');
+                    }, 3000);
                 }
             },
             (error) => {
                 console.error("Error loading game data:", error);
                 setMessage("ゲームデータの読み込みに失敗しました。ロビーに戻ります。");
-                setTimeout(() => setScreen('lobby'), 3000);
+                setTimeout(() => {
+                    performCompleteStateReset();
+                    setScreen('lobby');
+                }, 3000);
             }
         );
         
@@ -2092,7 +2168,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     onClose={() => setIsGameOverModalOpen(false)}
                     gameData={gameData}
                     userId={userId}
-                    onReturnToLobby={() => setScreen('lobby')}
+                    onReturnToLobby={() => {
+                        performCompleteStateReset();
+                        setScreen('lobby');
+                    }}
                     onStartReview={() => setShowReviewMode(true)}
                 />
             )}
@@ -2136,6 +2215,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 <button
                                     onClick={() => {
                                         setShowResultModal(false);
+                                        performCompleteStateReset();
                                         setScreen('lobby');
                                     }}
                                     className="w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
@@ -2158,6 +2238,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     gameId={gameId}
                     onExit={() => {
                         setShowReviewMode(false);
+                        performCompleteStateReset();
                         setScreen('lobby');
                     }}
                 />
