@@ -237,12 +237,22 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                         {/* 横軸ラベル（アルファベット）- 左上角のスペースを含む */}
                                         <div className="flex mb-1">
                                             {/* 左上角のスペース（縦軸ラベル分の幅） */}
-                                            <div className="w-8 h-8"></div>
-                                            {/* アルファベットラベル - 迷路セルサイズに合わせる */}
+                                            <div className={`${(() => {
+                                                const gridSize = currentDisplayMaze.gridSize || 6;
+                                                if (gridSize > 10) return 'w-7 h-7 md:w-8 md:h-8';
+                                                if (gridSize > 7) return 'w-8 h-8 md:w-10 md:h-10';
+                                                return 'w-12 h-12 md:w-16 md:h-16';
+                                            })()}`}></div>
+                                            {/* アルファベットラベル - MazeGridと同じレスポンシブサイズ */}
                                             {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => 
                                                 String.fromCharCode(65 + i) // A, B, C, D, E, F, G, ...
                                             ).map((letter) => (
-                                                <div key={letter} className="w-12 h-8 flex items-center justify-center text-sm font-semibold text-gray-600 border border-transparent">
+                                                <div key={letter} className={`${(() => {
+                                                    const gridSize = currentDisplayMaze.gridSize || 6;
+                                                    if (gridSize > 10) return 'w-7 h-7 md:w-8 md:h-8';
+                                                    if (gridSize > 7) return 'w-8 h-8 md:w-10 md:h-10';
+                                                    return 'w-12 h-12 md:w-16 md:h-16';
+                                                })()} flex items-center justify-center text-xs md:text-sm font-semibold text-gray-600 border border-transparent`}>
                                                     {letter}
                                                 </div>
                                             ))}
@@ -250,10 +260,15 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                         
                                         {/* 迷路グリッドと縦軸ラベル */}
                                         <div className="flex">
-                                            {/* 縦軸ラベル（数字） - 迷路セルサイズに合わせる */}
+                                            {/* 縦軸ラベル（数字） - MazeGridと同じレスポンシブサイズ */}
                                             <div className="flex flex-col mr-1">
                                                 {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => i + 1).map((number) => (
-                                                    <div key={number} className="w-8 h-12 flex items-center justify-center text-sm font-semibold text-gray-600 border border-transparent">
+                                                    <div key={number} className={`${(() => {
+                                                        const gridSize = currentDisplayMaze.gridSize || 6;
+                                                        if (gridSize > 10) return 'w-7 h-7 md:w-8 md:h-8';
+                                                        if (gridSize > 7) return 'w-8 h-8 md:w-10 md:h-10';
+                                                        return 'w-12 h-12 md:w-16 md:h-16';
+                                                    })()} flex items-center justify-center text-xs md:text-sm font-semibold text-gray-600 border border-transparent`}>
                                                         {number}
                                                     </div>
                                                 ))}
