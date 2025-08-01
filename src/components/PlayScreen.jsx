@@ -343,13 +343,26 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             // 四人対戦モードでのバトル発生チェック
             let battleOpponent = null;
             if (gameData?.mode === '4player') {
-                // 移動先に他のプレイヤーがいるかチェック
-                const otherPlayers = Object.entries(gameData.playerStates || {})
-                    .filter(([pid, ps]) => pid !== effectiveUserId && ps.position)
-                    .find(([pid, ps]) => ps.position.r === newR && ps.position.c === newC);
+                // 現在アクティブなバトルがないことを確認
+                const hasActiveBattle = gameData.activeBattle && 
+                                       gameData.activeBattle.status && 
+                                       ['betting', 'fighting'].includes(gameData.activeBattle.status);
                 
-                if (otherPlayers) {
-                    battleOpponent = otherPlayers[0]; // プレイヤーID
+                // アクティブなバトルがない場合のみ新しいバトルをチェック
+                if (!hasActiveBattle) {
+                    // 移動先に他のプレイヤーがいるかチェック
+                    const otherPlayerAtSamePosition = Object.entries(gameData.playerStates || {})
+                        .filter(([pid, ps]) => pid !== effectiveUserId && ps.position)
+                        .find(([pid, ps]) => ps.position.r === newR && ps.position.c === newC);
+                    
+                    if (otherPlayerAtSamePosition) {
+                        battleOpponent = otherPlayerAtSamePosition[0]; // プレイヤーID
+                        console.log("🥊 [Battle] Position collision detected:", {
+                            player1: effectiveUserId.substring(0, 8),
+                            player2: battleOpponent.substring(0, 8),
+                            position: { r: newR, c: newC }
+                        });
+                    }
                 }
             }
 
@@ -414,28 +427,69 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
             // バトル発生処理
             if (battleOpponent && gameData?.mode === '4player') {
-                // バトル状態を設定（新しい構造）
-                updates.activeBattle = {
-                    participants: [effectiveUserId, battleOpponent],
-                    startTime: serverTimestamp(),
-                    status: 'betting'
-                };
+                // 相手プレイヤーが既にバトル中でないかを確認
+                const opponentState = gameData.playerStates[battleOpponent];
+                const currentPlayerState = gameData.playerStates[effectiveUserId];
                 
-                // オープンチャットに通知
-                const myName = getUserNameById(effectiveUserId);
-                const opponentName = getUserNameById(battleOpponent);
-                sendSystemChatMessage(`${myName}と${opponentName}でバトルが発生しました！`);
+                const opponentInBattle = opponentState?.inBattleWith || 
+                                       (gameData.activeBattle?.participants?.includes(battleOpponent));
+                const currentPlayerInBattle = currentPlayerState?.inBattleWith || 
+                                            (gameData.activeBattle?.participants?.includes(effectiveUserId));
                 
-                // バトルモーダルを開く（この時点では当事者のみ）
-                setIsBattleModalOpen(true);
-                setMessage("バトル発生！ポイントを賭けてください。");
+                if (!opponentInBattle && !currentPlayerInBattle) {
+                    console.log("🥊 [Battle] Starting new battle:", {
+                        player1: effectiveUserId.substring(0, 8),
+                        player2: battleOpponent.substring(0, 8),
+                        position: { r: newR, c: newC }
+                    });
+                    
+                    // バトル状態を設定（新しい構造）
+                    updates.activeBattle = {
+                        participants: [effectiveUserId, battleOpponent],
+                        startTime: serverTimestamp(),
+                        status: 'betting'
+                    };
+                    
+                    // 両プレイヤーのバトル状態をリセット
+                    updates[`playerStates.${effectiveUserId}.battleBet`] = null;
+                    updates[`playerStates.${battleOpponent}.battleBet`] = null;
+                    updates[`playerStates.${effectiveUserId}.inBattleWith`] = battleOpponent;
+                    updates[`playerStates.${battleOpponent}.inBattleWith`] = effectiveUserId;
+                    
+                    // オープンチャットに通知
+                    const myName = getUserNameById(effectiveUserId);
+                    const opponentName = getUserNameById(battleOpponent);
+                    sendSystemChatMessage(`${myName}と${opponentName}でバトルが発生しました！`);
+                    
+                    // バトルモーダルを開く（この時点では当事者のみ）
+                    setIsBattleModalOpen(true);
+                    setMessage("バトル発生！ポイントを賭けてください。");
+                } else {
+                    console.log("⚠️ [Battle] Cannot start battle - one or both players already in battle:", {
+                        currentPlayerInBattle,
+                        opponentInBattle
+                    });
+                }
             }
             
             // 移動成功時はターンを継続（壁にぶつかるまで連続移動可能）
             // デバッグモードでも通常モードと同様に、壁にぶつかるまでターンを継続
             // 自動ターン切り替えは行わない
             
-            await updateDoc(gameDocRef, updates);
+            // Firebaseのデータを更新
+            try {
+                await updateDoc(gameDocRef, updates);
+                console.log("✅ [Movement] Successfully updated game data:", {
+                    playerId: effectiveUserId.substring(0, 8),
+                    newPosition: { r: newR, c: newC },
+                    hasBattle: !!battleOpponent,
+                    updatesKeys: Object.keys(updates)
+                });
+            } catch (error) {
+                console.error("❌ [Movement] Failed to update game data:", error);
+                setMessage("移動の更新に失敗しました。");
+                return;
+            }
             
             // 移動成功時は連続移動を許可（ゴール到達時以外）
             // 壁にぶつかるまで自分のターンを継続
@@ -1592,25 +1646,38 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     useEffect(() => {
         if (gameData?.activeBattle && gameData?.mode === '4player') {
             const battle = gameData.activeBattle;
-            const isParticipant = battle.participants?.includes(userId);
+            const isParticipant = battle.participants?.includes(effectiveUserId);
+            
+            console.log("🥊 [Battle] Battle state monitoring:", {
+                battleExists: !!battle,
+                battleStatus: battle.status,
+                participants: battle.participants,
+                currentUser: effectiveUserId.substring(0, 8),
+                isParticipant,
+                modalOpen: isBattleModalOpen
+            });
             
             // 当事者の場合：バトルモーダルを表示
             if (isParticipant && !isBattleModalOpen && battle.status === 'betting') {
+                console.log("🥊 [Battle] Opening battle modal for participant");
                 setIsBattleModalOpen(true);
             }
             
             // 非当事者の場合：バトルモーダルを閉じる
             if (!isParticipant && isBattleModalOpen) {
+                console.log("🥊 [Battle] Closing battle modal for non-participant");
                 setIsBattleModalOpen(false);
             }
             
             // 全当事者が賭けを完了した場合、結果を処理
             if (battle.status === 'betting') {
                 const allParticipantsBetted = battle.participants?.every(pid => 
-                    gameData.playerStates[pid]?.battleBet !== undefined
+                    gameData.playerStates[pid]?.battleBet !== undefined && 
+                    gameData.playerStates[pid]?.battleBet !== null
                 );
                 
                 if (allParticipantsBetted) {
+                    console.log("🥊 [Battle] All participants have placed bets, processing result");
                     processBattleResult(battle);
                 }
             }
