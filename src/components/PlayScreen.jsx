@@ -83,11 +83,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // ホームに戻る確認ダイアログ
     const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
     
-    // 全プレイヤー退出確認システム
-    const [showExitVoteDialog, setShowExitVoteDialog] = useState(false);
-    const [exitInitiatedBy, setExitInitiatedBy] = useState(null);
-    const [exitVotes, setExitVotes] = useState({});
-    const [hasVotedToExit, setHasVotedToExit] = useState(false);
+    // ゲーム中断通知ダイアログ
+    const [showGameInterruptedDialog, setShowGameInterruptedDialog] = useState(false);
+    const [interruptedByPlayerName, setInterruptedByPlayerName] = useState('');
 
     // デバッグモード用のプレイヤー切り替え機能
     const [debugCurrentPlayerId, setDebugCurrentPlayerId] = useState(userId);
@@ -771,70 +769,38 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         console.log("✅ [StateReset] All states reset to initial values");
     };
 
-    // ホームに戻る確認処理（完全リセット付き）
-    const handleExitConfirm = () => {
-        setShowExitConfirmDialog(false);
-        initiateExitVote();
-    };
-
-    // 退出投票を開始
-    const initiateExitVote = async () => {
+    // ホームに戻るボタンのクリック処理
+    const handleExitButtonClick = async () => {
         if (!gameData || !gameId) return;
         
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
             
-            // 自分の投票を含めて投票を開始
-            const initialVotes = { [userId]: true };
-            
+            // ゲームを中断状態に設定し、他のプレイヤーに通知
             await updateDoc(gameDocRef, {
-                exitVote: {
-                    initiatedBy: userId,
-                    startTime: serverTimestamp(),
-                    votes: initialVotes
-                }
+                status: 'interrupted',
+                interruptedBy: userId,
+                interruptedAt: serverTimestamp(),
+                interruptedPlayerName: currentUserName
             });
             
-            setHasVotedToExit(true);
-            setMessage("他のプレイヤーの退出確認を待っています...");
-            sendSystemChatMessage(`${currentUserName}がゲーム終了を提案しました。`);
+            // システムメッセージを送信
+            sendSystemChatMessage(`${currentUserName}がゲームを中断しました。`);
+            
+            console.log("🔄 [Exit] Game interrupted, returning to lobby");
+            
+            // 状態をリセットしてホームに戻る
+            performCompleteStateReset();
+            setScreen('lobby');
             
         } catch (error) {
-            console.error("Error initiating exit vote:", error);
-            setMessage("退出投票の開始に失敗しました。");
+            console.error("Error interrupting game:", error);
+            setMessage("ゲーム中断に失敗しました。");
+            
+            // エラーの場合でも強制的に戻る
+            performCompleteStateReset();
+            setScreen('lobby');
         }
-    };
-
-    // 退出投票
-    const voteToExit = async (vote) => {
-        if (!gameData?.exitVote || hasVotedToExit) return;
-        
-        try {
-            const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
-            
-            await updateDoc(gameDocRef, {
-                [`exitVote.votes.${userId}`]: vote
-            });
-            
-            setHasVotedToExit(true);
-            setShowExitVoteDialog(false);
-            
-            if (vote) {
-                setMessage("ゲーム終了に投票しました。");
-            } else {
-                setMessage("ゲーム続行に投票しました。");
-                sendSystemChatMessage(`${currentUserName}がゲーム続行を選択しました。`);
-            }
-            
-        } catch (error) {
-            console.error("Error voting to exit:", error);
-            setMessage("投票に失敗しました。");
-        }
-    };
-
-    // ホームに戻るボタンのクリック処理
-    const handleExitButtonClick = () => {
-        setShowExitConfirmDialog(true);
     };
 
     // 緊急時の強制リセット処理（エラー発生時などに使用）
@@ -1693,64 +1659,17 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen]);
 
-    // 退出投票状態監視
+    // ゲーム中断状態監視
     useEffect(() => {
-        if (gameData?.exitVote) {
-            const vote = gameData.exitVote;
+        if (gameData?.status === 'interrupted' && gameData?.interruptedBy !== userId) {
+            // 他のプレイヤーがゲームを中断した場合
+            const interruptedPlayerName = gameData.interruptedPlayerName || 'プレイヤー';
             
-            // 自分が開始者でない場合、投票ダイアログを表示
-            if (vote.initiatedBy !== userId && !showExitVoteDialog && !hasVotedToExit) {
-                setExitInitiatedBy(vote.initiatedBy);
-                setExitVotes(vote.votes || {});
-                setShowExitVoteDialog(true);
-            }
-            
-            // 全員が賛成票を投じた場合、ゲーム終了
-            if (vote.votes && gameData.players) {
-                const allPlayersVoted = gameData.players.every(playerId => 
-                    vote.votes[playerId] !== undefined
-                );
-                const allVotedYes = gameData.players.every(playerId => 
-                    vote.votes[playerId] === true
-                );
-                
-                if (allPlayersVoted && allVotedYes) {
-                    handleGameExit();
-                } else if (allPlayersVoted && !allVotedYes) {
-                    // 誰かがゲーム続行を選択した場合、投票をリセット
-                    const clearVote = async () => {
-                        try {
-                            const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
-                            await updateDoc(gameDocRef, {
-                                exitVote: deleteField()
-                            });
-                        } catch (error) {
-                            console.error("Error clearing exit vote:", error);
-                        }
-                    };
-                    
-                    clearVote();
-                    
-                    setTimeout(() => {
-                        if (vote.initiatedBy === userId) {
-                            setMessage("ゲーム終了提案が却下されました。ゲームを続行します。");
-                        }
-                        setShowExitVoteDialog(false);
-                        setHasVotedToExit(false);
-                        setExitInitiatedBy(null);
-                        setExitVotes({});
-                    }, 1000); // 短縮して1秒に
-                }
-            }
-        } else {
-            // 退出投票がない場合は状態をリセット
-            setShowExitVoteDialog(false);
-            setHasVotedToExit(false);
-            setExitInitiatedBy(null);
-            setExitVotes({});
+            // 中断通知ダイアログを表示
+            setShowGameInterruptedDialog(true);
+            setInterruptedByPlayerName(interruptedPlayerName);
         }
-    }, [gameData?.exitVote, gameData?.players, userId, showExitVoteDialog, hasVotedToExit]);
-
+    }, [gameData?.status, gameData?.interruptedBy, gameData?.interruptedPlayerName, userId]);
     // handleSendChatMessage関数の実装
     const handleSendChatMessage = async () => {
         if (!chatInput.trim() || !gameId) return;
@@ -2036,50 +1955,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         <MazeGrid
                                             mazeData={mazeToPlayData}
                                             playerPosition={effectivePlayerState?.position}
-                                            otherPlayers={(() => {
-                                                // 四人対戦モードでは他プレイヤーの位置を表示しない
-                                                if (gameData?.mode === '4player') return [];
-                                                
-                                                // 二人対戦モードでは相手の位置を表示する
-                                                if (gameData?.mode === '2player') {
-                                                    if (!gameData?.players || !gameData?.playerStates) return [];
-                                                    
-                                                    return gameData.players
-                                                        .filter(playerId => playerId !== effectiveUserId) // 自分以外
-                                                        .map(playerId => {
-                                                            const playerState = gameData.playerStates[playerId];
-                                                            // 二人対戦では相手の位置を常に表示
-                                                            if (playerState?.position) {
-                                                                return {
-                                                                    id: playerId,
-                                                                    position: playerState.position,
-                                                                    name: getUserNameById(playerId)
-                                                                };
-                                                            }
-                                                            return null;
-                                                        })
-                                                        .filter(player => player !== null); // nullを除外
-                                                }
-                                                
-                                                // その他のモードでは従来通り（相手が同じ迷路を攻略している場合のみ）
-                                                if (!gameData?.players || !gameData?.playerStates) return [];
-                                                
-                                                return gameData.players
-                                                    .filter(playerId => playerId !== effectiveUserId) // 自分以外
-                                                    .map(playerId => {
-                                                        const playerState = gameData.playerStates[playerId];
-                                                        // 相手が同じ迷路を攻略している場合（同じ迷路作成者に割り当てられている）
-                                                        if (playerState?.assignedMazeOwnerId === effectivePlayerState?.assignedMazeOwnerId) {
-                                                            return {
-                                                                id: playerId,
-                                                                position: playerState.position,
-                                                                name: getUserNameById(playerId)
-                                                            };
-                                                        }
-                                                        return null;
-                                                    })
-                                                    .filter(player => player !== null); // nullを除外
-                                            })()} // 二人対戦では相手の位置を常に表示、四人対戦では表示しない
+                                            otherPlayers={[]} // 左側の迷路では他プレイヤーの位置を表示しない
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
                                             hitWalls={debugMode ? (gameData?.playerStates?.[effectiveUserId]?.hitWalls || []) : (myPlayerState?.hitWalls || hitWalls)}
@@ -2102,6 +1978,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                     {effectivePlayerState?.goalTime && (
                                         <p className="text-green-600 font-semibold">ゴール達成！</p>
                                     )}
+                                    <p className="text-xs text-gray-600 mt-1">※相手の位置は表示されません</p>
                                 </div>
                             </div>
                         ) : (
@@ -2407,7 +2284,27 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                         walls: ((debugMode ? gameData?.mazes?.[effectiveUserId] : myCreatedMazeData)?.walls || []).filter(w => w.active === true)
                                                     }}
                                                     playerPosition={null} // 自分の迷路なので自分の位置は表示しない
-                                                    otherPlayers={[]} // 右側の迷路では他プレイヤーの現在地を表示しない
+                                                    otherPlayers={(() => {
+                                                        // 二人対戦モードで、相手が自分の迷路を攻略している場合の位置を表示
+                                                        if (gameData?.mode === '2player' && gameData?.players && gameData?.playerStates) {
+                                                            return gameData.players
+                                                                .filter(playerId => playerId !== effectiveUserId) // 自分以外
+                                                                .map(playerId => {
+                                                                    const playerState = gameData.playerStates[playerId];
+                                                                    // 相手が自分の迷路を攻略している場合（自分が迷路作成者）
+                                                                    if (playerState?.assignedMazeOwnerId === effectiveUserId && playerState?.position) {
+                                                                        return {
+                                                                            id: playerId,
+                                                                            position: playerState.position,
+                                                                            name: getUserNameById(playerId)
+                                                                        };
+                                                                    }
+                                                                    return null;
+                                                                })
+                                                                .filter(player => player !== null); // nullを除外
+                                                        }
+                                                        return []; // その他の場合は表示しない
+                                                    })()}
                                                     showAllWalls={true}
                                                     onCellClick={() => {}}
                                                     gridSize={currentGridSize}
@@ -2420,7 +2317,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         
                                         <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
                                             <p className="font-semibold text-blue-700">あなたの作った迷路:</p>
-                                            <p>相手が攻略中です</p>
+                                            <p>相手が攻略中です（相手の現在位置を表示）</p>
                                             <p>全ての壁が見えています</p>
                                         </div>
                                     </div>
@@ -2707,92 +2604,31 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 />
             )}
 
-            {/* 退出確認ダイアログ */}
-            {showExitConfirmDialog && (
+            {/* ゲーム中断通知ダイアログ */}
+            {showGameInterruptedDialog && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-md w-11/12">
-                        <h2 className="text-xl font-bold mb-4 text-gray-800">ゲーム終了の確認</h2>
+                        <h2 className="text-xl font-bold mb-4 text-gray-800">ゲームが中断されました</h2>
                         <p className="text-gray-600 mb-6">
-                            ゲームを終了してホームに戻りますか？<br />
-                            <span className="text-blue-600 text-sm mt-2 block">
-                                ※ 他のプレイヤーにも確認が求められ、全員が同意した場合のみゲームが終了します。
-                            </span>
+                            {interruptedByPlayerName}がゲームを中断しました。<br />
+                            ホームに戻ります。
                         </p>
-                        <div className="flex gap-3 justify-end">
+                        <div className="flex justify-center">
                             <button
-                                onClick={() => setShowExitConfirmDialog(false)}
-                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded"
+                                onClick={() => {
+                                    setShowGameInterruptedDialog(false);
+                                    performCompleteStateReset();
+                                    setScreen('lobby');
+                                }}
+                                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold"
                             >
-                                キャンセル
-                            </button>
-                            <button
-                                onClick={handleExitConfirm}
-                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
-                            >
-                                ゲーム終了を提案
+                                確認
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* 退出投票ダイアログ */}
-            {showExitVoteDialog && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-md w-11/12">
-                        <h2 className="text-xl font-bold mb-4 text-gray-800">ゲーム終了の投票</h2>
-                        <p className="text-gray-600 mb-4">
-                            {getUserNameById(exitInitiatedBy)}がゲーム終了を提案しました。<br />
-                            ゲームを終了しますか？
-                        </p>
-                        
-                        {/* 現在の投票状況 */}
-                        <div className="mb-6 p-3 bg-gray-50 rounded">
-                            <p className="text-sm font-semibold text-gray-700 mb-2">投票状況:</p>
-                            <div className="space-y-1">
-                                {gameData?.players?.map(playerId => {
-                                    const playerName = playerId === userId ? currentUserName : getUserNameById(playerId);
-                                    const vote = exitVotes[playerId];
-                                    let status = "未投票";
-                                    let statusColor = "text-gray-500";
-                                    
-                                    if (vote === true) {
-                                        status = "ゲーム終了";
-                                        statusColor = "text-red-600";
-                                    } else if (vote === false) {
-                                        status = "ゲーム続行";
-                                        statusColor = "text-green-600";
-                                    }
-                                    
-                                    return (
-                                        <div key={playerId} className="flex justify-between text-sm">
-                                            <span>{playerName}</span>
-                                            <span className={statusColor}>{status}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={() => voteToExit(false)}
-                                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded"
-                                disabled={hasVotedToExit}
-                            >
-                                ゲームを続ける
-                            </button>
-                            <button
-                                onClick={() => voteToExit(true)}
-                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
-                                disabled={hasVotedToExit}
-                            >
-                                ゲームを終わる
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             
             {/* デバッグコントロール */}
             {debugMode && (
