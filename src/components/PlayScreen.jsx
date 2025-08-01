@@ -2037,17 +2037,28 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             mazeData={mazeToPlayData}
                                             playerPosition={effectivePlayerState?.position}
                                             otherPlayers={(() => {
-                                                // 四人対戦モードでは他プレイヤーの位置を表示しない
+                                                // 2人対戦は必ず相手の位置を表示
+                                                if (gameData?.mode === '2player') {
+                                                    if (!gameData?.players || !gameData?.playerStates) return [];
+                                                    return gameData.players
+                                                        .filter(playerId => playerId !== effectiveUserId)
+                                                        .map(playerId => {
+                                                            const playerState = gameData.playerStates[playerId];
+                                                            return {
+                                                                id: playerId,
+                                                                position: playerState.position,
+                                                                name: getUserNameById(playerId)
+                                                            };
+                                                        });
+                                                }
+                                                // 4人対戦は現状通り
                                                 if (gameData?.mode === '4player') return [];
-                                                
-                                                // 相手プレイヤーの情報を取得
+                                                // その他モードは従来通り
                                                 if (!gameData?.players || !gameData?.playerStates) return [];
-                                                
                                                 return gameData.players
-                                                    .filter(playerId => playerId !== effectiveUserId) // 自分以外
+                                                    .filter(playerId => playerId !== effectiveUserId)
                                                     .map(playerId => {
                                                         const playerState = gameData.playerStates[playerId];
-                                                        // 相手が同じ迷路を攻略している場合（同じ迷路作成者に割り当てられている）
                                                         if (playerState?.assignedMazeOwnerId === effectivePlayerState?.assignedMazeOwnerId) {
                                                             return {
                                                                 id: playerId,
@@ -2057,8 +2068,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                         }
                                                         return null;
                                                     })
-                                                    .filter(player => player !== null); // nullを除外
-                                            })()} // 四人対戦以外では相手が同じ迷路を攻略している場合は相手の位置も表示
+                                                    .filter(player => player !== null);
+                                            })()}
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
                                             hitWalls={debugMode ? (gameData?.playerStates?.[effectiveUserId]?.hitWalls || []) : (myPlayerState?.hitWalls || hitWalls)}
@@ -2067,9 +2078,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             sharedWallsFromAllies={sharedWalls}
                                             highlightPlayer={true}
                                             smallView={false}
-                                            showAllPlayerPositions={false}
+                                            showAllPlayerPositions={gameData?.mode === '2player'}
                                             isCreating={false}
-                                            showAllWalls={debugMode && showOpponentWallsDebug} // デバッグモード時の壁表示
+                                            showAllWalls={debugMode && showOpponentWallsDebug}
                                         />
                                     </div>
                                 </div>
