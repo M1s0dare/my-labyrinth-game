@@ -231,10 +231,14 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                     </div>
                                 )}
                                 
-                                {/* 座標ラベル */}
-                                <div className="mb-2">
-                                    <div className="flex justify-center">
-                                        <div className={`grid gap-1 w-fit`} style={{ gridTemplateColumns: `repeat(${currentDisplayMaze.gridSize || 6}, minmax(0, 1fr))` }}>
+                                {/* 座標ラベルと迷路グリッドを統一レイアウトで配置 */}
+                                <div className="flex justify-center">
+                                    <div className="flex flex-col">
+                                        {/* 横軸ラベル（アルファベット）- 左上角のスペースを含む */}
+                                        <div className="flex mb-1">
+                                            {/* 左上角のスペース（縦軸ラベル分の幅） */}
+                                            <div className="w-6 h-6"></div>
+                                            {/* アルファベットラベル */}
                                             {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => 
                                                 String.fromCharCode(65 + i) // A, B, C, D, E, F, G, ...
                                             ).map((letter) => (
@@ -243,35 +247,38 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex justify-center">
-                                    <div className="flex flex-col mr-2">
-                                        {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => i + 1).map((number) => (
-                                            <div key={number} className="w-6 h-8 flex items-center justify-center text-sm font-semibold text-gray-600">
-                                                {number}
+                                        
+                                        {/* 迷路グリッドと縦軸ラベル */}
+                                        <div className="flex">
+                                            {/* 縦軸ラベル（数字） */}
+                                            <div className="flex flex-col mr-1">
+                                                {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => i + 1).map((number) => (
+                                                    <div key={number} className="w-6 h-8 flex items-center justify-center text-sm font-semibold text-gray-600">
+                                                        {number}
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                            
+                                            {/* 迷路グリッド */}
+                                            <MazeGrid
+                                                mazeData={currentDisplayMaze}
+                                                playerPosition={currentPlayerState?.position}
+                                                otherPlayers={players.filter(p => p !== userId).map(p => ({
+                                                    id: p,
+                                                    position: gameData.playerStates[p]?.position,
+                                                    name: p === userId ? currentUserName : `プレイヤー${players.indexOf(p) + 1}`
+                                                }))}
+                                                revealedCells={currentPlayerState?.revealedCells || {}}
+                                                revealedPlayerWalls={(currentDisplayMaze?.walls || []).filter(wall => wall.active === true)}
+                                                onCellClick={() => {}}
+                                                gridSize={currentDisplayMaze?.gridSize || 6}
+                                                sharedWallsFromAllies={[]}
+                                                highlightPlayer={true}
+                                                smallView={false}
+                                                showAllWalls={true}
+                                            />
+                                        </div>
                                     </div>
-                                    
-                                    <MazeGrid
-                                        mazeData={currentDisplayMaze}
-                                        playerPosition={currentPlayerState?.position}
-                                        otherPlayers={players.filter(p => p !== userId).map(p => ({
-                                            id: p,
-                                            position: gameData.playerStates[p]?.position,
-                                            name: p === userId ? currentUserName : `プレイヤー${players.indexOf(p) + 1}`
-                                        }))}
-                                        revealedCells={currentPlayerState?.revealedCells || {}}
-                                        revealedPlayerWalls={(currentDisplayMaze?.walls || []).filter(wall => wall.active === true)}
-                                        onCellClick={() => {}}
-                                        gridSize={currentDisplayMaze?.gridSize || 6}
-                                        sharedWallsFromAllies={[]}
-                                        highlightPlayer={true}
-                                        smallView={false}
-                                        showAllWalls={true}
-                                    />
                                 </div>
                                 
                                 {/* 迷路情報 */}
