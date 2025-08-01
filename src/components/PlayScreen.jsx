@@ -376,8 +376,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             if (!effectivePlayerState.revealedCells[`${newR}-${newC}`]) {
                 updates[`playerStates.${effectiveUserId}.score`] = increment(1);
                 updates[`playerStates.${effectiveUserId}.revealedCells.${newR}-${newC}`] = true;
+                            if (gameData?.mode === '4player') {
+
                 moveMessage = `(${newR},${newC})に移動！ +1pt`;
                 setMessage(moveMessage);
+                            }
+                            else {
+                moveMessage = `(${newR},${newC})に移動しました。`;
+                            }
             } else {
                 moveMessage = `(${newR},${newC})に移動しました。`;
                 setMessage(moveMessage);
