@@ -15,23 +15,116 @@ import './HelpOverlay.css';
 export const HelpOverlay = ({ page = 1, onClose }) => {
     const renderPage1 = () => (
         <div className="help-content">
-            <h2>遊び方</h2>
-            {/* 1ページ目は後で実装予定 */}
-            <div className="placeholder-content">
-                <p className="text-gray-500">遊び方の説明は後で追加予定です。</p>
-                <div className="placeholder-sections">
-                    <div className="placeholder-section">
-                        <h3>基本ルール</h3>
-                        <p className="text-gray-400">基本的なゲームの流れについて説明します。</p>
+            <h2>🎮 ラビリンス - 遊び方ガイド</h2>
+            <p className="help-description">見えない壁の迷路で相手の思考を読み合う心理戦ゲームです。</p>
+            
+            <div className="help-sections">
+                <div className="help-section">
+                    <h3>🎯 ゲームの目的</h3>
+                    <p>他のプレイヤーが作った「見えない壁」の迷路を攻略して、ゴールを目指します。壁の位置は見えないため、移動しながら壁の配置を推理していく必要があります。</p>
+                </div>
+
+                <div className="help-section">
+                    <h3>📋 基本ルール</h3>
+                    <ul>
+                        <li><strong>マップ:</strong> 6×6のマス（36マス）で構成</li>
+                        <li><strong>壁:</strong> 各マスの間に20本の壁が設置されている</li>
+                        <li><strong>移動:</strong> 上下左右に1マスずつ移動可能</li>
+                        <li><strong>壁判定:</strong> 移動先に壁がある場合は移動失敗、壁が表示される</li>
+                        <li><strong>連続移動:</strong> 壁にぶつかるまで連続で移動できる</li>
+                        <li><strong>ゴール:</strong> ゴールマスに到達すれば勝利</li>
+                    </ul>
+                </div>
+
+                <div className="help-section">
+                    <h3>🏃‍♂️ スタンダードモード（2人対戦）</h3>
+                    <div className="mode-details">
+                        <h4>📝 準備フェーズ</h4>
+                        <ul>
+                            <li>各プレイヤーが6×6マスの迷路を作成</li>
+                            <li>20本の壁、スタート位置、ゴール位置を設定</li>
+                            <li>相手の迷路を攻略し、自分の迷路は相手が攻略</li>
+                        </ul>
+                        
+                        <h4>🎲 ゲーム進行</h4>
+                        <ul>
+                            <li>ランダムで順番を決定し、交互にターンを進行</li>
+                            <li>相手の位置が常に見える（心理戦の要素）</li>
+                            <li>壁にぶつかるとターン終了</li>
+                            <li>どちらかがゴールした時点でゲーム終了</li>
+                        </ul>
+                        
+                        <h4>🎯 勝利条件</h4>
+                        <p>先にゴールに到達したプレイヤーの勝利</p>
                     </div>
-                    <div className="placeholder-section">
-                        <h3>スタンダードモード</h3>
-                        <p className="text-gray-400">2人対戦のルールについて説明します。</p>
+                </div>
+
+                <div className="help-section">
+                    <h3>⚔️ エクストラモード（4人対戦）</h3>
+                    <div className="mode-details">
+                        <h4>📝 準備フェーズ</h4>
+                        <ul>
+                            <li>4人それぞれが迷路を作成（計4つの迷路）</li>
+                            <li>迷路はランダムにシャッフルして配布</li>
+                            <li>自分が作った迷路は自分では攻略しない</li>
+                        </ul>
+                        
+                        <h4>🎲 ゲーム進行</h4>
+                        <ul>
+                            <li>宣言フェーズ: アクションを選択・宣言</li>
+                            <li>実行フェーズ: 宣言されたアクションを実行</li>
+                            <li>他プレイヤーの位置は基本的に見えない</li>
+                            <li>自分が作った迷路をプレイしている人の位置のみ見える</li>
+                        </ul>
+                        
+                        <h4>💰 ポイントシステム</h4>
+                        <ul>
+                            <li><strong>移動ポイント:</strong> 未探索マスに入ると +1pt</li>
+                            <li><strong>バトル勝利:</strong> バトルに勝つと +5pt</li>
+                            <li><strong>ゴール順位:</strong> 1位:20pt / 2位:15pt / 3位:10pt / 4位:0pt</li>
+                        </ul>
+                        
+                        <h4>⚔️ バトルシステム</h4>
+                        <ul>
+                            <li>同じマスに複数プレイヤーが止まるとバトル発生</li>
+                            <li>お互いポイントを賭けて、多く賭けた方が勝利</li>
+                            <li>敗者は次のターンを休み</li>
+                            <li>同じ相手とは1回しかバトルできない</li>
+                        </ul>
+                        
+                        <h4>🎯 勝利条件</h4>
+                        <p>3人がゴールした時点でゲーム終了。総ポイントが最も高いプレイヤーの勝利</p>
                     </div>
-                    <div className="placeholder-section">
-                        <h3>エクストラモード</h3>
-                        <p className="text-gray-400">4人対戦の特殊ルールについて説明します。</p>
-                    </div>
+                </div>
+
+                <div className="help-section">
+                    <h3>🎮 操作方法</h3>
+                    <ul>
+                        <li><strong>移動:</strong> 画面の矢印ボタン または キーボードの矢印キー/WASD</li>
+                        <li><strong>セル選択:</strong> 迷路のマスを直接クリック（隣接セルのみ）</li>
+                        <li><strong>チャット:</strong> Open Chat（全員）とClosed Chat（自分のみ）を活用</li>
+                        <li><strong>アクション:</strong> エクストラモードでは移動・偵察・妨害・交渉・待機から選択</li>
+                    </ul>
+                </div>
+
+                <div className="help-section">
+                    <h3>💡 戦略のヒント</h3>
+                    <ul>
+                        <li><strong>心理戦:</strong> チャットで相手を誤誘導したり、協力を持ちかけたりしよう</li>
+                        <li><strong>壁の記憶:</strong> 一度ぶつかった壁の位置を覚えておこう</li>
+                        <li><strong>相手観察:</strong> 相手の動きから迷路の構造を推理しよう</li>
+                        <li><strong>リスク管理:</strong> バトルでは適切な賭けポイントを選択しよう</li>
+                        <li><strong>情報戦:</strong> 真実と嘘を使い分けて相手を翻弄しよう</li>
+                    </ul>
+                </div>
+
+                <div className="help-section">
+                    <h3>🔧 チャット機能</h3>
+                    <ul>
+                        <li><strong>Open Chat:</strong> 全プレイヤーに見える公開チャット</li>
+                        <li><strong>Closed Chat:</strong> 自分だけに見える非公開チャット（実際の行動入力用）</li>
+                        <li><strong>テンプレート:</strong> よく使う発言のテンプレート集も活用可能</li>
+                    </ul>
                 </div>
             </div>
         </div>
