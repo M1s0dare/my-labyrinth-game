@@ -190,15 +190,16 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             <span className="text-green-600 font-bold">ゴール達成!</span>
                                         )}
                                     </div>
+                                    if(gameData?.mode==='4player'){
                                     <div className="text-sm text-gray-600 mt-1">
                                         <p>スコア: {playerState?.score || 0}pt</p>
-                                        <p>発見セル数: {Object.keys(playerState?.revealedCells || {}).length}</p>
-                                        {playerState?.goalTime && (
-                                            <p className="text-green-600">
-                                                ゴール時刻: {new Date(playerState.goalTime.seconds * 1000).toLocaleTimeString()}
-                                            </p>
-                                        )}
+                                        <p>到達マス数: {Object.keys(playerState?.revealedCells || {}).length}</p>
                                     </div>
+                                    }else{
+                                        <div className="text-sm text-gray-600 mt-1">
+                                        <p>到達マス数: {Object.keys(playerState?.revealedCells || {}).length}</p>
+                                        </div>
+                                    }
                                 </div>
                             );
                         })}
