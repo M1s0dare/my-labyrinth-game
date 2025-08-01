@@ -238,6 +238,29 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                         
                         {currentDisplayMaze && currentDisplayMaze.walls ? (
                             <div className="relative">
+                                {/* 凡例 */}
+                                <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                                    <h4 className="font-semibold text-gray-700 mb-2">表示の説明</h4>
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-4 h-4 bg-yellow-200 border-2 border-yellow-400 rounded"></div>
+                                            <span>通った経路</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-4 h-4 border-t-4 border-red-500"></div>
+                                            <span>ぶつかった壁（赤）</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                                            <span>プレイヤー最終位置</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                                            <span>ゴール</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 {/* デバッグ情報 */}
                                 {process.env.NODE_ENV === 'development' && (
                                     <div className="mb-2 p-2 bg-yellow-50 rounded text-xs">
@@ -297,6 +320,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                                 otherPlayers={[]} // 他のプレイヤーは表示しない
                                                 revealedCells={selectedPlayerState?.revealedCells || {}} // 選択されたプレイヤーの通った経路
                                                 revealedPlayerWalls={(currentDisplayMaze?.walls || []).filter(wall => wall.active === true)}
+                                                hitWalls={selectedPlayerState?.hitWalls || []} // 選択されたプレイヤーがぶつかった壁（赤色表示）
                                                 onCellClick={() => {}}
                                                 gridSize={currentDisplayMaze?.gridSize || 6}
                                                 sharedWallsFromAllies={[]}
@@ -331,6 +355,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                                 })()}</p>
                                                 <p>• 探索セル数: {Object.keys(selectedPlayerState.revealedCells || {}).length}個</p>
                                                 <p>• 最終位置: ({selectedPlayerState.position?.r || 0}, {selectedPlayerState.position?.c || 0})</p>
+                                                <p>• ぶつかった壁: {(selectedPlayerState.hitWalls || []).length}個</p>
                                                 <p>• ゴール達成: {selectedPlayerState.goalTime ? '✅ 達成' : '❌ 未達成'}</p>
                                                 {selectedPlayerState.goalTime && (
                                                     <p>• スコア: {selectedPlayerState.score || 0}pt</p>

@@ -79,6 +79,26 @@ export const useGameLogic = (gameId, gameData, gameType, userId, mazeToPlayData,
                 }
                 return prev;
             });
+            
+            // hitWallsをFirestoreに保存
+            try {
+                const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
+                const wallKey = `${hitWall.type}-${hitWall.r}-${hitWall.c}`;
+                
+                // 現在のhitWallsを取得して新しい壁を追加
+                const currentHitWalls = gameData?.playerStates?.[actualUserId]?.hitWalls || [];
+                const isAlreadyHit = currentHitWalls.some(w => `${w.type}-${w.r}-${w.c}` === wallKey);
+                
+                if (!isAlreadyHit) {
+                    const updatedHitWalls = [...currentHitWalls, hitWall];
+                    await updateDoc(gameDocRef, {
+                        [`playerStates.${actualUserId}.hitWalls`]: updatedHitWalls
+                    });
+                }
+            } catch (error) {
+                console.error("Error saving hit wall:", error);
+            }
+            
             setMessage("壁に阻まれて移動できません。");
             setIsMoving(false);
             return;

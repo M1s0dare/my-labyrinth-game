@@ -31,6 +31,7 @@ import { STANDARD_GRID_SIZE } from '../constants';
  * @param {Array} alliedPlayersPos - 同盟プレイヤーの位置
  * @param {Array} sharedWallsFromAllies - 同盟プレイヤーから共有された壁情報
  * @param {boolean} showAllPlayerPositions - 全プレイヤーの位置を表示するかどうか
+ * @param {Array} hitWalls - ぶつかった壁の情報（赤く表示される）
  */
 const MazeGrid = ({
     mazeData,
@@ -53,7 +54,8 @@ const MazeGrid = ({
     onTrapCoordSelect,
     alliedPlayersPos = [],
     sharedWallsFromAllies = [],
-    showAllPlayerPositions = false
+    showAllPlayerPositions = false,
+    hitWalls = []
 }) => {
     // ローディング表示の処理
     if (!isCreating && !mazeData && !smallView) return <div className="text-center p-4">迷路データを読み込み中...</div>;
@@ -193,6 +195,40 @@ const MazeGrid = ({
         return !!revealedWall || !!sharedWall;
     };
 
+    /**
+     * 2つのセル間の壁がhitWallsに含まれているかどうかを判定する関数
+     * @param {number} r1 - セル1の行
+     * @param {number} c1 - セル1の列
+     * @param {number} r2 - セル2の行
+     * @param {number} c2 - セル2の列
+     * @returns {boolean} ぶつかった壁の存在有無
+     */
+    const isHitWallBetween = (r1, c1, r2, c2) => {
+        if (!hitWalls || hitWalls.length === 0) return false;
+        
+        let wallR, wallC, wallType;
+        
+        // 移動方向に応じて壁のタイプと位置を決定
+        if (r1 === r2) { 
+            // 水平移動：縦の壁をチェック
+            wallType = 'vertical'; 
+            wallR = r1; 
+            wallC = Math.min(c1, c2);
+        } else if (c1 === c2) { 
+            // 垂直移動：横の壁をチェック
+            wallType = 'horizontal'; 
+            wallR = Math.min(r1, r2);
+            wallC = c1; 
+        } else {
+            return false;
+        }
+        
+        // hitWallsに該当する壁があるかチェック
+        return hitWalls.some(wall => 
+            wall.type === wallType && wall.r === wallR && wall.c === wallC
+        );
+    };
+
     // メインの迷路グリッドをレンダリング
     return (
         <div className={`grid grid-cols-1 gap-0 ${smallView ? 'border-2' : 'border-8'} border-black bg-gray-50 rounded-md shadow-lg`} style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`}}>
@@ -242,28 +278,49 @@ const MazeGrid = ({
                     let borderStyles = "";
                     const wallBorderThickness = smallView ? 'border-2' : 'border-8'; // 壁を太くした
                     const wallBorder = `border-black ${wallBorderThickness}`;
+                    const hitWallBorder = `border-red-500 ${wallBorderThickness}`; // ぶつかった壁用（赤色）
                     const pathBorder = smallView ? 'border-gray-300' : 'border-gray-300';
                     const outerBorderThickness = smallView ? 'border-2' : 'border-8'; // 外枠も太くした
 
                     // 上の境界線を設定
                     if (r === 0) borderStyles += ` border-t ${outerBorderThickness} border-t-black`;
-                    else if (hasWallBetween(r,c,r-1,c)) borderStyles += ` border-t ${wallBorderThickness} border-t-black`; 
-                    else borderStyles += ` border-t ${pathBorder}`;
+                    else if (hasWallBetween(r,c,r-1,c)) {
+                        if (isHitWallBetween(r,c,r-1,c)) {
+                            borderStyles += ` border-t ${wallBorderThickness} border-t-red-500`;
+                        } else {
+                            borderStyles += ` border-t ${wallBorderThickness} border-t-black`;
+                        }
+                    } else borderStyles += ` border-t ${pathBorder}`;
                     
                     // 下の境界線を設定
                     if (r === gridSize - 1) borderStyles += ` border-b ${outerBorderThickness} border-b-black`;
-                    else if (hasWallBetween(r,c,r+1,c)) borderStyles += ` border-b ${wallBorderThickness} border-b-black`; 
-                    else borderStyles += ` border-b ${pathBorder}`;
+                    else if (hasWallBetween(r,c,r+1,c)) {
+                        if (isHitWallBetween(r,c,r+1,c)) {
+                            borderStyles += ` border-b ${wallBorderThickness} border-b-red-500`;
+                        } else {
+                            borderStyles += ` border-b ${wallBorderThickness} border-b-black`;
+                        }
+                    } else borderStyles += ` border-b ${pathBorder}`;
 
                     // 左の境界線を設定
                     if (c === 0) borderStyles += ` border-l ${outerBorderThickness} border-l-black`;
-                    else if (hasWallBetween(r,c,r,c-1)) borderStyles += ` border-l ${wallBorderThickness} border-l-black`; 
-                    else borderStyles += ` border-l ${pathBorder}`;
+                    else if (hasWallBetween(r,c,r,c-1)) {
+                        if (isHitWallBetween(r,c,r,c-1)) {
+                            borderStyles += ` border-l ${wallBorderThickness} border-l-red-500`;
+                        } else {
+                            borderStyles += ` border-l ${wallBorderThickness} border-l-black`;
+                        }
+                    } else borderStyles += ` border-l ${pathBorder}`;
 
                     // 右の境界線を設定
                     if (c === gridSize - 1) borderStyles += ` border-r ${outerBorderThickness} border-r-black`;
-                    else if (hasWallBetween(r,c,r,c+1)) borderStyles += ` border-r ${wallBorderThickness} border-r-black`; 
-                    else borderStyles += ` border-r ${pathBorder}`;
+                    else if (hasWallBetween(r,c,r,c+1)) {
+                        if (isHitWallBetween(r,c,r,c+1)) {
+                            borderStyles += ` border-r ${wallBorderThickness} border-r-red-500`;
+                        } else {
+                            borderStyles += ` border-r ${wallBorderThickness} border-r-black`;
+                        }
+                    } else borderStyles += ` border-r ${pathBorder}`;
                     
                     cellClasses += ` ${borderStyles}`;
 

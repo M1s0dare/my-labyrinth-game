@@ -1756,6 +1756,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             })()} // 相手が同じ迷路を攻略している場合は相手の位置も表示
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
+                                            hitWalls={effectivePlayerState?.hitWalls || []}
                                             onCellClick={handleCellClick}
                                             gridSize={currentGridSize}
                                             sharedWallsFromAllies={sharedWalls}
