@@ -224,9 +224,16 @@ const MazeGrid = ({
         }
         
         // hitWallsに該当する壁があるかチェック
-        return hitWalls.some(wall => 
+        const isHit = hitWalls.some(wall => 
             wall.type === wallType && wall.r === wallR && wall.c === wallC
         );
+        
+        // デバッグログ
+        if (isHit) {
+            console.log("🔴 [MazeGrid] Hit wall found:", { wallType, wallR, wallC, r1, c1, r2, c2 });
+        }
+        
+        return isHit;
     };
 
     // メインの迷路グリッドをレンダリング

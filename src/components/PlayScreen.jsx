@@ -136,6 +136,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         
     }, [gameData, effectivePlayerState, effectiveUserId, gameType, setMessage]);
 
+    // hitWallsの状態をFirestoreから同期
+    useEffect(() => {
+        if (myPlayerState?.hitWalls && Array.isArray(myPlayerState.hitWalls)) {
+            setHitWalls(myPlayerState.hitWalls);
+            console.log("🔧 [HitWalls] Synced from Firestore:", myPlayerState.hitWalls);
+        }
+    }, [myPlayerState?.hitWalls]);
+
     // デバッグモード時に全プレイヤーの状態を同期
     useEffect(() => {
         if (debugMode && gameData?.playerStates) {
@@ -261,7 +269,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 return prev;
             });
 
-            // ぶつかった壁をrevealedPlayerWallsに追加（プレイヤーが発見した壁として記録）
+            // ぶつかった壁をFirestoreに保存
             try {
                 const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
                 const wallToReveal = {
@@ -272,14 +280,23 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     discoveredAt: new Date().toISOString()
                 };
                 
-                // revealedWallsに追加
-                updateDoc(gameDocRef, {
+                // hitWallsに追加（重複チェック付き）
+                const currentHitWalls = effectivePlayerState?.hitWalls || [];
+                const wallKey = `${hitWall.type}-${hitWall.r}-${hitWall.c}`;
+                const isAlreadyHit = currentHitWalls.some(w => `${w.type}-${w.r}-${w.c}` === wallKey);
+                
+                const updates = {
                     [`playerStates.${effectiveUserId}.revealedWalls`]: arrayUnion(wallToReveal)
-                }).catch(error => {
-                    console.error("Error updating revealed walls:", error);
-                });
+                };
+                
+                if (!isAlreadyHit) {
+                    updates[`playerStates.${effectiveUserId}.hitWalls`] = [...currentHitWalls, hitWall];
+                }
+                
+                await updateDoc(gameDocRef, updates);
+                console.log("🔧 [HitWalls] Saved to Firestore:", hitWall);
             } catch (error) {
-                console.error("Error recording discovered wall:", error);
+                console.error("Error recording hit wall:", error);
             }
 
             setMessage(`壁に阻まれて移動できません。壁を発見しました！ ターン終了です。`);
@@ -1756,7 +1773,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             })()} // 相手が同じ迷路を攻略している場合は相手の位置も表示
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
-                                            hitWalls={effectivePlayerState?.hitWalls || []}
+                                            hitWalls={debugMode ? (gameData?.playerStates?.[effectiveUserId]?.hitWalls || []) : (myPlayerState?.hitWalls || hitWalls)}
                                             onCellClick={handleCellClick}
                                             gridSize={currentGridSize}
                                             sharedWallsFromAllies={sharedWalls}
@@ -1771,6 +1788,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
                                     <p className="font-semibold text-blue-700">あなたの状態:</p>
                                     <p>位置: ({effectivePlayerState?.position?.r || 0}, {effectivePlayerState?.position?.c || 0})</p>
+                                    <p>ぶつかった壁: {(effectivePlayerState?.hitWalls || []).length}個</p>
                                     {/* <p>スコア: {effectivePlayerState?.score || 0}pt</p> */}
                                     {effectivePlayerState?.goalTime && (
                                         <p className="text-green-600 font-semibold">ゴール達成！</p>
@@ -2052,6 +2070,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             }
                                             revealedCells={myPlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={myPlayerState?.revealedWalls || []}
+                                            hitWalls={myPlayerState?.hitWalls || []}
                                             onCellClick={handleCellClick}
                                             gridSize={currentGridSize}
                                             sharedWalls={sharedWalls}
