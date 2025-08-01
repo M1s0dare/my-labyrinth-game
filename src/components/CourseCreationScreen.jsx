@@ -9,7 +9,7 @@ import { CheckCircle, XCircle, Clock } from 'lucide-react';
 import { db, appId } from '../firebase';
 import MazeGrid from './MazeGrid';
 import { STANDARD_GRID_SIZE, EXTRA_GRID_SIZE, WALL_COUNT, SECRET_OBJECTIVES, DECLARATION_PHASE_DURATION, EXTRA_MODE_PERSONAL_TIME_LIMIT } from '../constants';
-import { createInitialWallStates, isPathPossible, shuffleArray, formatTime } from '../utils';
+import { createInitialWallStates, isPathPossible, shuffleArray, formatTime, getUsername } from '../utils';
 
 /**
  * コース作成画面コンポーネント
@@ -33,6 +33,18 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [settingMode, setSettingMode] = useState('wall');  // 設定モード（wall/start/goal）
     const [message, setMessage] = useState(`壁を${WALL_COUNT}本設置し、S/Gを設定してください。`);  // メッセージ
     const [creationTimeLeft, setCreationTimeLeft] = useState(null);  // 作成残り時間
+
+    // ユーザー名を取得
+    const currentUserName = getUsername() || "未設定ユーザー";
+
+    // ユーザーIDからユーザー名を取得するヘルパー関数
+    const getUserNameById = (playerId) => {
+        if (playerId === userId) {
+            return currentUserName;
+        }
+        // 他のプレイヤーのユーザー名を取得（ゲームデータのplayerStatesから取得、またはフォールバック）
+        return gameData?.playerStates?.[playerId]?.playerName || `プレイヤー${playerId.substring(0,8)}...`;
+    };
 
     // === 初期化処理 ===
     useEffect(() => {
@@ -356,7 +368,7 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 </button>
             </div>
             {gameId && <p className="text-sm text-slate-600 mb-1">ゲームID: {gameId.substring(0,8)}...</p>}
-            {userId && <p className="text-sm text-slate-600 mb-1">あなた: {userId.substring(0,8)}... ({gameMode})</p>}
+            {userId && <p className="text-sm text-slate-600 mb-1">あなた: {currentUserName} ({gameMode})</p>}
             {gameType === 'extra' && creationTimeLeft !== null && 
                 <p className="text-lg font-semibold text-red-600 mb-2">
                     <Clock size={20} className="inline mr-1"/> 残り時間: {formatTime(creationTimeLeft)}
@@ -395,7 +407,7 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     <ul className="list-disc list-inside text-sm">
                         {gameData.players.map(pid => (
                             <li key={pid} className={pid === userId ? 'font-bold' : ''}>
-                                {pid.substring(0,8)}... {gameData.mazes && gameData.mazes[pid] ? <CheckCircle size={16} className="inline text-green-500 ml-1"/> : <span className="text-xs text-gray-500">(作成中)</span>}
+                                {getUserNameById(pid)} {gameData.mazes && gameData.mazes[pid] ? <CheckCircle size={16} className="inline text-green-500 ml-1"/> : <span className="text-xs text-gray-500">(作成中)</span>}
                             </li>
                         ))}
                     </ul>
