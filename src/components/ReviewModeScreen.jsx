@@ -251,7 +251,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             <span>プレイヤー最終位置</span>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                                            <div className="w-4 h-4 bg-red-500 rounded-full"></div>
                                             <span>ゴール</span>
                                         </div>
                                     </div>
@@ -349,7 +349,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                                     const solverPlayerId = players.find(pid => gameData.playerStates[pid]?.assignedMazeOwnerId === selectedMazeOwner);
                                                     return solverPlayerId === userId ? currentUserName : `プレイヤー${players.indexOf(solverPlayerId) + 1}`;
                                                 })()}</p>
-                                                <p>• 探索セル数: {Object.keys(selectedPlayerState.revealedCells || {}).length}個</p>
+                                                <p>• 見つけたマスの数: {Object.keys(selectedPlayerState.revealedCells || {}).length}個</p>
                                                 <p>• 最終位置: ({selectedPlayerState.position?.r || 0}, {selectedPlayerState.position?.c || 0})</p>
                                                 <p>• ぶつかった壁: {(selectedPlayerState.hitWalls || []).length}個</p>
                                                 <p>• ゴール達成: {selectedPlayerState.goalTime ? '✅ 達成' : '❌ 未達成'}</p>
