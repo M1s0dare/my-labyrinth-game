@@ -717,10 +717,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             setShowExitVoteDialog(false);
             
             if (vote) {
-                setMessage("ゲーム終了に賛成しました。");
+                setMessage("ゲーム終了に投票しました。");
             } else {
-                setMessage("ゲーム終了に反対しました。");
-                sendSystemChatMessage(`${currentUserName}がゲーム終了に反対しました。`);
+                setMessage("ゲーム続行に投票しました。");
+                sendSystemChatMessage(`${currentUserName}がゲーム続行を選択しました。`);
             }
             
         } catch (error) {
@@ -1580,16 +1580,29 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 if (allPlayersVoted && allVotedYes) {
                     handleGameExit();
                 } else if (allPlayersVoted && !allVotedYes) {
-                    // 誰かが反対票を投じた場合、投票をリセット
+                    // 誰かがゲーム続行を選択した場合、投票をリセット
+                    const clearVote = async () => {
+                        try {
+                            const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
+                            await updateDoc(gameDocRef, {
+                                exitVote: deleteField()
+                            });
+                        } catch (error) {
+                            console.error("Error clearing exit vote:", error);
+                        }
+                    };
+                    
+                    clearVote();
+                    
                     setTimeout(() => {
                         if (vote.initiatedBy === userId) {
-                            setMessage("ゲーム終了が否決されました。");
+                            setMessage("ゲーム終了提案が却下されました。ゲームを続行します。");
                         }
                         setShowExitVoteDialog(false);
                         setHasVotedToExit(false);
                         setExitInitiatedBy(null);
                         setExitVotes({});
-                    }, 2000);
+                    }, 1000); // 短縮して1秒に
                 }
             }
         } else {
@@ -2583,11 +2596,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                     let statusColor = "text-gray-500";
                                     
                                     if (vote === true) {
-                                        status = "賛成";
-                                        statusColor = "text-green-600";
-                                    } else if (vote === false) {
-                                        status = "反対";
+                                        status = "ゲーム終了";
                                         statusColor = "text-red-600";
+                                    } else if (vote === false) {
+                                        status = "ゲーム続行";
+                                        statusColor = "text-green-600";
                                     }
                                     
                                     return (
@@ -2603,17 +2616,17 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => voteToExit(false)}
-                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded"
+                                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded"
                                 disabled={hasVotedToExit}
                             >
-                                反対
+                                ゲームを続ける
                             </button>
                             <button
                                 onClick={() => voteToExit(true)}
                                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
                                 disabled={hasVotedToExit}
                             >
-                                賛成
+                                ゲームを終わる
                             </button>
                         </div>
                     </div>
