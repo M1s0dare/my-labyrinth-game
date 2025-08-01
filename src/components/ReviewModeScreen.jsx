@@ -234,8 +234,10 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                 {/* 座標ラベル */}
                                 <div className="mb-2">
                                     <div className="flex justify-center">
-                                        <div className="grid grid-cols-6 gap-1 w-fit">
-                                            {['A', 'B', 'C', 'D', 'E', 'F'].map((letter) => (
+                                        <div className={`grid gap-1 w-fit`} style={{ gridTemplateColumns: `repeat(${currentDisplayMaze.gridSize || 6}, minmax(0, 1fr))` }}>
+                                            {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => 
+                                                String.fromCharCode(65 + i) // A, B, C, D, E, F, G, ...
+                                            ).map((letter) => (
                                                 <div key={letter} className="w-8 h-6 flex items-center justify-center text-sm font-semibold text-gray-600">
                                                     {letter}
                                                 </div>
@@ -246,7 +248,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                 
                                 <div className="flex justify-center">
                                     <div className="flex flex-col mr-2">
-                                        {[1, 2, 3, 4, 5, 6].map((number) => (
+                                        {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => i + 1).map((number) => (
                                             <div key={number} className="w-6 h-8 flex items-center justify-center text-sm font-semibold text-gray-600">
                                                 {number}
                                             </div>
