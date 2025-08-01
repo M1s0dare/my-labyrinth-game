@@ -237,12 +237,12 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                         {/* 横軸ラベル（アルファベット）- 左上角のスペースを含む */}
                                         <div className="flex mb-1">
                                             {/* 左上角のスペース（縦軸ラベル分の幅） */}
-                                            <div className="w-6 h-6"></div>
-                                            {/* アルファベットラベル */}
+                                            <div className="w-8 h-8"></div>
+                                            {/* アルファベットラベル - 迷路セルサイズに合わせる */}
                                             {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => 
                                                 String.fromCharCode(65 + i) // A, B, C, D, E, F, G, ...
                                             ).map((letter) => (
-                                                <div key={letter} className="w-8 h-6 flex items-center justify-center text-sm font-semibold text-gray-600">
+                                                <div key={letter} className="w-12 h-8 flex items-center justify-center text-sm font-semibold text-gray-600 border border-transparent">
                                                     {letter}
                                                 </div>
                                             ))}
@@ -250,10 +250,10 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                         
                                         {/* 迷路グリッドと縦軸ラベル */}
                                         <div className="flex">
-                                            {/* 縦軸ラベル（数字） */}
+                                            {/* 縦軸ラベル（数字） - 迷路セルサイズに合わせる */}
                                             <div className="flex flex-col mr-1">
                                                 {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => i + 1).map((number) => (
-                                                    <div key={number} className="w-6 h-8 flex items-center justify-center text-sm font-semibold text-gray-600">
+                                                    <div key={number} className="w-8 h-12 flex items-center justify-center text-sm font-semibold text-gray-600 border border-transparent">
                                                         {number}
                                                     </div>
                                                 ))}
