@@ -2037,28 +2037,38 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             mazeData={mazeToPlayData}
                                             playerPosition={effectivePlayerState?.position}
                                             otherPlayers={(() => {
-                                                // 2人対戦は必ず相手の位置を表示
+                                                // 四人対戦モードでは他プレイヤーの位置を表示しない
+                                                if (gameData?.mode === '4player') return [];
+                                                
+                                                // 二人対戦モードでは相手の位置を表示する
                                                 if (gameData?.mode === '2player') {
                                                     if (!gameData?.players || !gameData?.playerStates) return [];
+                                                    
                                                     return gameData.players
-                                                        .filter(playerId => playerId !== effectiveUserId)
+                                                        .filter(playerId => playerId !== effectiveUserId) // 自分以外
                                                         .map(playerId => {
                                                             const playerState = gameData.playerStates[playerId];
-                                                            return {
-                                                                id: playerId,
-                                                                position: playerState.position,
-                                                                name: getUserNameById(playerId)
-                                                            };
-                                                        });
+                                                            // 二人対戦では相手の位置を常に表示
+                                                            if (playerState?.position) {
+                                                                return {
+                                                                    id: playerId,
+                                                                    position: playerState.position,
+                                                                    name: getUserNameById(playerId)
+                                                                };
+                                                            }
+                                                            return null;
+                                                        })
+                                                        .filter(player => player !== null); // nullを除外
                                                 }
-                                                // 4人対戦は現状通り
-                                                if (gameData?.mode === '4player') return [];
-                                                // その他モードは従来通り
+                                                
+                                                // その他のモードでは従来通り（相手が同じ迷路を攻略している場合のみ）
                                                 if (!gameData?.players || !gameData?.playerStates) return [];
+                                                
                                                 return gameData.players
-                                                    .filter(playerId => playerId !== effectiveUserId)
+                                                    .filter(playerId => playerId !== effectiveUserId) // 自分以外
                                                     .map(playerId => {
                                                         const playerState = gameData.playerStates[playerId];
+                                                        // 相手が同じ迷路を攻略している場合（同じ迷路作成者に割り当てられている）
                                                         if (playerState?.assignedMazeOwnerId === effectivePlayerState?.assignedMazeOwnerId) {
                                                             return {
                                                                 id: playerId,
@@ -2068,8 +2078,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                         }
                                                         return null;
                                                     })
-                                                    .filter(player => player !== null);
-                                            })()}
+                                                    .filter(player => player !== null); // nullを除外
+                                            })()} // 二人対戦では相手の位置を常に表示、四人対戦では表示しない
                                             revealedCells={effectivePlayerState?.revealedCells || {}}
                                             revealedPlayerWalls={effectivePlayerState?.revealedWalls || []}
                                             hitWalls={debugMode ? (gameData?.playerStates?.[effectiveUserId]?.hitWalls || []) : (myPlayerState?.hitWalls || hitWalls)}
@@ -2078,9 +2088,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             sharedWallsFromAllies={sharedWalls}
                                             highlightPlayer={true}
                                             smallView={false}
-                                            showAllPlayerPositions={gameData?.mode === '2player'}
+                                            showAllPlayerPositions={false}
                                             isCreating={false}
-                                            showAllWalls={debugMode && showOpponentWallsDebug}
+                                            showAllWalls={debugMode && showOpponentWallsDebug} // デバッグモード時の壁表示
                                         />
                                     </div>
                                 </div>
