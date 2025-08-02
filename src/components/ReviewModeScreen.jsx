@@ -311,15 +311,15 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             {/* アルファベットラベル - MazeGridと同じレスポンシブサイズ */}
                                             
                                             {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => 
-                                                String.fromCharCode(65 + i) // A, B, C, D, E, F, G, ...
-                                            ).map((letter) => (
-                                                <div key={letter} className={`${(() => {
+                                                i + 1 // 1, 2, 3, 4, 5, 6, ...
+                                            ).map((number) => (
+                                                <div key={number} className={`${(() => {
                                                     const gridSize = currentDisplayMaze.gridSize || 6;
                                                     if (gridSize > 10) return 'w-7 h-7 md:w-8 md:h-8';
                                                     if (gridSize > 7) return 'w-8 h-8 md:w-10 md:h-10';
                                                     return 'w-12 h-12 md:w-16 md:h-16';
                                                 })()} flex items-center justify-center text-xs md:text-sm font-semibold text-gray-600 border border-transparent`}>
-                                                    {letter}
+                                                    {number}
                                                 </div>
                                             ))}
                                             
