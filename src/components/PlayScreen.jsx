@@ -1660,7 +1660,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             {currentUserName}の状態
                                         </p>
                                         <p className="text-blue-600">
-                                            位置: ({effectivePlayerState?.position?.r || 0}, {effectivePlayerState?.position?.c || 0})
+                                            位置: ({effectivePlayerState?.position?.c|| 1}, {effectivePlayerState?.position?.r || 1})
                                         </p>
                                     </div>
                                 </div>

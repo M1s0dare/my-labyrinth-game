@@ -493,39 +493,8 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                 </div>
             </div>
 
-            {/* 振り返りエリア */}
-            <div className="bg-white rounded-lg shadow-md p-4 mt-4">
-                <h3 className="text-lg font-semibold mb-3 flex items-center">
-                    <Eye size={18} className="mr-2"/>
-                    ゲーム分析
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <h4 className="font-semibold text-gray-700 mb-2">迷路の特徴</h4>
-                        <ul className="text-sm text-gray-600 space-y-1">
-                            <li>• 総壁数: {currentDisplayMaze?.walls?.length || 0}個</li>
-                            <li>• アクティブ壁数: {(currentDisplayMaze?.walls || []).filter(w => w.active === true).length}個</li>
-                            <li>• ゴール到達率: {players.filter(p => gameData.playerStates[p]?.goalTime).length}/{players.length}</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-gray-700 mb-2">プレイヤー分析</h4>
-                        <ul className="text-sm text-gray-600 space-y-1">
-                            <li>• 平均探索セル数: {Math.round(players.reduce((sum, p) => sum + Object.keys(gameData.playerStates[p]?.revealedCells || {}).length, 0) / players.length)}</li>
-                            <li>• 最高スコア: {Math.max(...players.map(p => gameData.playerStates[p]?.score || 0))}</li>
-                            <li>• 探索効率: 良好</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-gray-700 mb-2">改善ポイント</h4>
-                        <ul className="text-sm text-gray-600 space-y-1">
-                            <li>• より効率的な探索ルート</li>
-                            <li>• 戦略的な迷路設計</li>
-                            <li>• プレイヤー間の駆け引き</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
+
+
         </div>
     );
 };
