@@ -309,6 +309,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                                 return 'w-12 h-12 md:w-16 md:h-16';
                                             })()}`}></div>
                                             {/* アルファベットラベル - MazeGridと同じレスポンシブサイズ */}
+                                            
                                             {Array.from({ length: currentDisplayMaze.gridSize || 6 }, (_, i) => 
                                                 String.fromCharCode(65 + i) // A, B, C, D, E, F, G, ...
                                             ).map((letter) => (
@@ -321,6 +322,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                                     {letter}
                                                 </div>
                                             ))}
+                                            
                                         </div>
                                         
                                         {/* 迷路グリッドと縦軸ラベル */}
@@ -356,39 +358,6 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             />
                                         </div>
                                     </div>
-                                </div>
-                                
-                                {/* 迷路情報 */}
-                                <div className="mt-4 p-3 bg-blue-50 rounded">
-                                    <h4 className="font-semibold text-blue-800 mb-2">
-                                        {getUserNameById(selectedMazeOwner)}の迷路
-                                    </h4>
-                                    <div className="text-sm text-blue-700 space-y-1">
-                                        <p>• 総壁数: {currentDisplayMaze.walls?.length || 0}個</p>
-                                        <p>• アクティブ壁数: {(currentDisplayMaze.walls || []).filter(w => w.active === true).length}個</p>
-                                        <p>• ゴール位置: ({currentDisplayMaze.goal?.r || 0}, {currentDisplayMaze.goal?.c || 0})</p>
-                                        <p>• 作成者: {getUserNameById(selectedMazeOwner)}</p>
-                                    </div>
-                                    
-                                    {/* 選択されたプレイヤーの攻略情報 */}
-                                    {selectedPlayerState && (
-                                        <div className="mt-3 pt-3 border-t border-blue-200">
-                                            <h5 className="font-semibold text-blue-800 mb-2">攻略結果</h5>
-                                            <div className="text-sm text-blue-700 space-y-1">
-                                                <p>• 攻略者: {(() => {
-                                                    const solverPlayerId = players.find(pid => gameData.playerStates[pid]?.assignedMazeOwnerId === selectedMazeOwner);
-                                                    return getUserNameById(solverPlayerId);
-                                                })()}</p>
-                                                <p>• 見つけたマスの数: {Object.keys(selectedPlayerState.revealedCells || {}).length}個</p>
-                                                <p>• 最終位置: ({selectedPlayerState.position?.r || 0}, {selectedPlayerState.position?.c || 0})</p>
-                                                <p>• ぶつかった壁: {(selectedPlayerState.hitWalls || []).length}個</p>
-                                                <p>• ゴール達成: {selectedPlayerState.goalTime ? '✅ 達成' : '❌ 未達成'}</p>
-                                                    {gameData?.mode === '4player' && selectedPlayerState.goalTime && (
-                                                            <p>スコア: {selectedPlayerState?.score || 0}pt</p>
-                                                        )}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         ) : (
