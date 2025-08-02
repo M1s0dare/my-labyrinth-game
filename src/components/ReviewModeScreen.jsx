@@ -124,18 +124,12 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
         }
     };
     
-    if (!gameData || !gameData.playerStates) {
-        return (
-            <div className="max-w-7xl mx-auto p-4 bg-gray-100 min-h-screen">
-                <div className="text-center">
-                    <p className="text-gray-500">データを読み込み中...</p>
-                </div>
-            </div>
-        );
-    }
-
     // 選択されたプレイヤーの状態を取得（迷路を攻略したプレイヤー）
     const selectedPlayerState = useMemo(() => {
+        if (!gameData || !gameData.playerStates) {
+            return null;
+        }
+        
         // 選択された迷路を攻略したプレイヤーを探す
         const playerWhoSolvedThisMaze = players.find(playerId => {
             const playerState = gameData.playerStates[playerId];
@@ -148,7 +142,17 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
         
         // 見つからない場合は、迷路作成者自身の状態を返す（フォールバック）
         return gameData.playerStates[selectedMazeOwner];
-    }, [players, gameData.playerStates, selectedMazeOwner]);
+    }, [players, gameData, selectedMazeOwner]);
+    
+    if (!gameData || !gameData.playerStates) {
+        return (
+            <div className="max-w-7xl mx-auto p-4 bg-gray-100 min-h-screen">
+                <div className="text-center">
+                    <p className="text-gray-500">データを読み込み中...</p>
+                </div>
+            </div>
+        );
+    }
 
     const currentPlayerState = gameData.playerStates[userId];
 

@@ -45,7 +45,7 @@ const PlayerMazeView = ({
                                 <div className="flex items-center">
                                     <User className="mr-2" size={16} />
                                     <span className="font-medium">
-                                        {playerId.substring(0, 8)}...
+                                        {gameData?.playerNames?.[playerId] || playerId.substring(0, 8) + '...'}
                                     </span>
                                 </div>
                                 
@@ -95,7 +95,7 @@ const PlayerMazeView = ({
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <h4 className="font-medium">
-                            {selectedViewPlayerId.substring(0, 8)}...の迷路
+                            {gameData?.playerNames?.[selectedViewPlayerId] || selectedViewPlayerId.substring(0, 8) + '...'}の迷路
                         </h4>
                         
                         {/* 詳細情報表示 */}
@@ -121,7 +121,9 @@ const PlayerMazeView = ({
                             smallView={false}
                             playerRevealedCells={gameData.playerStates?.[selectedViewPlayerId]?.revealedCells || {}}
                             isOtherPlayerView={true}
-                            hitWalls={[]} // 他プレイヤーの衝突壁は表示しない
+                            hitWalls={debugMode && showOpponentWallsDebug ? (gameData.playerStates?.[selectedViewPlayerId]?.hitWalls || []) : []} // デバッグ時は壁表示
+                            playerNames={gameData.playerNames || {}} // デバッグ表示用
+                            currentUserId={selectedViewPlayerId} // デバッグ表示用
                         />
                     </div>
                     
