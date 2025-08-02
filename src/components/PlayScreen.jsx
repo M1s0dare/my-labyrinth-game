@@ -1616,13 +1616,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 </div>
                                 <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
                                     <p className="font-semibold text-blue-700">あなたの状態:</p>
-                                    <p>位置: ({effectivePlayerState?.position?.r || 0}, {effectivePlayerState?.position?.c || 0})</p>
+                                    <p>位置: ({effectivePlayerState?.position?.c || 1}, {effectivePlayerState?.position?.r || 1})</p>
                                     <p>ぶつかった壁: {(effectivePlayerState?.hitWalls || []).length}個</p>
                                     {/* <p>スコア: {effectivePlayerState?.score || 0}pt</p> */}
                                     {effectivePlayerState?.goalTime && (
                                         <p className="text-green-600 font-semibold">ゴール達成！</p>
                                     )}
-                                    <p className="text-xs text-gray-600 mt-1">※相手の位置は表示されません</p>
                                 </div>
                             </div>
                         ) : (
