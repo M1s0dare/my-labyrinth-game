@@ -265,7 +265,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                         {currentDisplayMaze && currentDisplayMaze.walls ? (
                             <div className="relative">
                                 {/* 凡例 */}
-                                <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                                <div className="mb-3 p-3">
                                     <h4 className="font-semibold text-gray-700 mb-2">表示の説明</h4>
                                     <div className="grid grid-cols-2 gap-2 text-sm">
                                         <div className="flex items-center space-x-2">
