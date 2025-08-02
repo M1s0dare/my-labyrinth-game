@@ -234,10 +234,12 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode, isOnline }) =>
                 const playerNames = {};
                 if (debugMode) {
                     playerNames[userId] = username;
-                    // デバッグプレイヤーの名前も設定
+                    // デバッグプレイヤーの名前も設定（ランダムな名前を使用）
+                    const randomNames = ['たろう', 'はなこ', 'けんじ', 'みかん', 'さくら', 'ひろし', 'あやか', 'ゆうき'];
                     playersArray.forEach((pid, index) => {
                         if (pid !== userId && pid.startsWith('debug_player')) {
-                            playerNames[pid] = `デバッグプレイヤー${index + 1}`;
+                            const randomName = randomNames[Math.floor(Math.random() * randomNames.length)];
+                            playerNames[pid] = randomName;
                         }
                     });
                 } else {

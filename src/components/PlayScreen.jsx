@@ -56,6 +56,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [hitWalls, setHitWalls] = useState([]); // プレイヤーがぶつかった壁を記録
     const [canPressButton, setCanPressButton] = useState(true); // 移動ボタンを押せる状態を管理
     
+    // バトル処理中フラグ（重複実行防止）
+    const [isBattleProcessing, setIsBattleProcessing] = useState(false);
+    
     // ホームに戻る確認ダイアログ
     const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
     
@@ -581,14 +584,33 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const processBattleResult = async (battle) => {
         if (!battle || !battle.participants || battle.participants.length !== 2) return;
         
+        // 既に処理中のバトルかチェック（重複実行防止）
+        if (battle.status === 'completed' || battle.processing || isBattleProcessing) return;
+        
+        console.log("🥊 [Battle] Starting battle result processing");
+        setIsBattleProcessing(true);
+        
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
+            
+            // まずバトル状態を処理中に変更（重複実行防止）
+            await updateDoc(gameDocRef, {
+                'activeBattle.processing': true
+            });
+            
             const [player1, player2] = battle.participants;
             const player1State = gameData.playerStates[player1];
             const player2State = gameData.playerStates[player2];
             
             const player1Bet = player1State?.battleBet || 0;
             const player2Bet = player2State?.battleBet || 0;
+            
+            console.log("🥊 [Battle] Processing battle result:", {
+                player1: player1.substring(0, 8),
+                player2: player2.substring(0, 8),
+                player1Bet,
+                player2Bet
+            });
             
             let winner = null;
             let loser = null;
@@ -641,9 +663,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             // バトル関連状態をリセット
             setIsBattleModalOpen(false);
             
+            console.log("🥊 [Battle] Battle result processed successfully");
+            
         } catch (error) {
             console.error("Error processing battle result:", error);
             setMessage("バトル結果の処理に失敗しました。");
+        } finally {
+            setIsBattleProcessing(false);
         }
     };
 
@@ -1385,7 +1411,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             }
             
             // 全当事者が賭けを完了した場合、結果を処理
-            if (battle.status === 'betting') {
+            if (battle.status === 'betting' && !battle.processing) {
                 const allParticipantsBetted = battle.participants?.every(pid => 
                     gameData.playerStates[pid]?.battleBet !== undefined && 
                     gameData.playerStates[pid]?.battleBet !== null
@@ -1665,39 +1691,19 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 </div>
                             </div>
 
-                            {/* 四人対戦モード：全プレイヤーのポイント表示 */}
+                            {/* 四人対戦モード：自分のポイントのみ表示 */}
                             {gameData?.mode === '4player' && (
                                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                                    <h4 className="font-semibold text-yellow-700 mb-2">🏆 プレイヤーポイント</h4>
-                                    <div className="space-y-1 text-sm">
-                                        {gameData.players?.map((playerId, index) => {
-                                            const playerState = gameData.playerStates?.[playerId];
-                                            const isCurrentPlayer = playerId === effectiveUserId;
-                                            const isCurrentTurn = gameData.currentTurnPlayerId === playerId;
-                                            const isGoaled = playerState?.goalTime;
-                                            
-                                            return (
-                                                <div 
-                                                    key={playerId} 
-                                                    className={`flex justify-between items-center p-2 rounded ${
-                                                        isCurrentPlayer ? 'bg-green-100 border border-green-300' :
-                                                        isCurrentTurn ? 'bg-blue-100 border border-blue-300' :
-                                                        'bg-white border border-gray-200'
-                                                    }`}
-                                                >
-                                                    <span className={isCurrentPlayer ? 'font-bold text-green-700' : 'text-gray-700'}>
-                                                        {isCurrentPlayer ? currentUserName : getUserNameById(playerId)}
-                                                        {isCurrentTurn && <span className="ml-1 text-blue-600">📍</span>}
-                                                        {isGoaled && <span className="ml-1 text-green-600">🏁</span>}
-                                                    </span>
-                                                    <span className={`font-semibold ${
-                                                        isCurrentPlayer ? 'text-green-700' : 'text-yellow-600'
-                                                    }`}>
-                                                        {playerState?.score || 0}pt
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
+                                    <h4 className="font-semibold text-yellow-700 mb-2">🏆 あなたのポイント</h4>
+                                    <div className="text-center">
+                                        <div className="bg-green-100 border border-green-300 p-3 rounded">
+                                            <span className="font-bold text-green-700 text-lg">
+                                                {currentUserName}
+                                            </span>
+                                            <div className="font-bold text-green-700 text-xl mt-1">
+                                                {effectivePlayerState?.score || 0}pt
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -1847,7 +1853,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         {gameData.players?.map((playerId, index) => {
                                             const isCurrentPlayer = playerId === effectiveUserId;
                                             const isViewing = viewingMazeOwnerId === playerId;
-                                            const playerName = isCurrentPlayer ? '自分' : `P${index + 1}`;
+                                            const playerName = isCurrentPlayer ? '自分' : getUserNameById(playerId);
                                             
                                             return (
                                                 <button
@@ -1859,46 +1865,79 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                                     }`}
                                                 >
-                                                    {playerName}の迷路
+                                                    {playerName}がプレイ中の迷路
                                                 </button>
                                             );
                                         })}
                                     </div>
                                 </div>
                                 
-                                {gameData?.mazes?.[viewingMazeOwnerId] ? (
+                                {gameData?.mazes && viewingMazeOwnerId ? (
                                     <div>
                                         <div className="flex justify-center mb-4">
                                             <div className="w-fit max-w-sm mx-auto">
                                                 <MazeGrid
                                                     mazeData={{
-                                                        ...gameData.mazes[viewingMazeOwnerId],
-                                                        // 自分の迷路の場合は全ての壁を表示、他人の迷路の場合は壁を隠す
-                                                        walls: viewingMazeOwnerId === effectiveUserId 
-                                                            ? (gameData.mazes[viewingMazeOwnerId]?.walls || []).filter(w => w.active === true)
-                                                            : [] // 他人の迷路は壁を表示しない
+                                                        // プレイヤーが攻略している迷路を表示（assignedMazeOwnerIdから取得）
+                                                        ...(() => {
+                                                            const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                            const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                            const targetMaze = assignedMazeOwnerId ? gameData.mazes[assignedMazeOwnerId] : null;
+                                                            return targetMaze || {};
+                                                        })(),
+                                                        // 自分が作った迷路をプレイしている人の場合のみ全ての壁を表示
+                                                        walls: (() => {
+                                                            const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                            const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                            
+                                                            // 自分が作った迷路をプレイしている人かどうかをチェック
+                                                            const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
+                                                            
+                                                            if (isPlayingMyMaze) {
+                                                                // 自分が作った迷路をプレイしている人：全ての壁を表示
+                                                                const targetMaze = gameData.mazes[assignedMazeOwnerId];
+                                                                return (targetMaze?.walls || []).filter(w => w.active === true);
+                                                            } else {
+                                                                // その他：壁を表示しない
+                                                                return [];
+                                                            }
+                                                        })()
                                                     }}
-                                                    playerPosition={null}
+                                                    playerPosition={gameData.playerStates?.[viewingMazeOwnerId]?.position || null}
                                                     otherPlayers={[]} // 右側の迷路では他プレイヤーの現在地を表示しない
-                                                    showAllWalls={viewingMazeOwnerId === effectiveUserId} // 自分の迷路のみ壁を表示
+                                                    showAllWalls={(() => {
+                                                        const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                        const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                        return assignedMazeOwnerId === effectiveUserId; // 自分が作った迷路をプレイしている人のみ壁表示
+                                                    })()}
                                                     onCellClick={() => {}}
                                                     gridSize={currentGridSize}
                                                     sharedWalls={[]}
-                                                    highlightPlayer={false}
+                                                    highlightPlayer={true}
                                                     smallView={false}
+                                                    revealedCells={gameData.playerStates?.[viewingMazeOwnerId]?.revealedCells || {}}
+                                                    hitWalls={gameData.playerStates?.[viewingMazeOwnerId]?.hitWalls || []}
                                                 />
                                             </div>
                                         </div>
                                         
                                         <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
                                             <p className="font-semibold text-blue-700">
-                                                {viewingMazeOwnerId === effectiveUserId ? '自分の迷路' : '他プレイヤーの迷路'}
+                                                {viewingMazeOwnerId === effectiveUserId ? '自分が攻略中の迷路' : `${getUserNameById(viewingMazeOwnerId)}が攻略中の迷路`}
                                             </p>
-                                            {viewingMazeOwnerId === effectiveUserId ? (
-                                                <p className="text-blue-600">全ての壁とスタート・ゴールが表示されています</p>
-                                            ) : (
-                                                <p className="text-blue-600">スタートとゴールのみ表示されています（現在地は非表示）</p>
-                                            )}
+                                            {(() => {
+                                                const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
+                                                
+                                                if (viewingMazeOwnerId === effectiveUserId) {
+                                                    return <p className="text-blue-600">あなたの探索状況と発見した壁が表示されています</p>;
+                                                } else if (isPlayingMyMaze) {
+                                                    return <p className="text-blue-600">あなたが作った迷路をプレイ中です（全ての壁が見えます）</p>;
+                                                } else {
+                                                    return <p className="text-blue-600">他プレイヤーの現在位置とスタート・ゴールが表示されています（壁は非表示）</p>;
+                                                }
+                                            })()}
                                         </div>
                                     </div>
                                 ) : (

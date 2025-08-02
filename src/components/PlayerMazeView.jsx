@@ -75,8 +75,8 @@ const PlayerMazeView = ({
                                     </span>
                                 </div>
                                 
-                                {/* デバッグモードまたは公開情報の場合のみポイント表示 */}
-                                {(debugMode || gameData?.showAllScores) && (
+                                {/* デバッグモードでのみポイント表示（4人対戦では他プレイヤーのポイントは非表示） */}
+                                {debugMode && gameData?.mode !== '4player' && (
                                     <div className="flex items-center">
                                         <Trophy className="mr-1" size={10} />
                                         <span>

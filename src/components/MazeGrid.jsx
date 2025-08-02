@@ -283,11 +283,12 @@ const MazeGrid = ({
 
                     // 壁の境界線スタイルを設定
                     let borderStyles = "";
-                    const wallBorderThickness = smallView ? 'border-2' : 'border-8'; // 壁を太くした
+                    const outerBorderThickness = smallView ? 'border-2' : 'border-[10px]'; // 外枠の太さをより太く（10px）
+                    const wallBorderThickness = smallView ? 'border-[0.5px]' : 'border-8'; // 内部の壁の太さをさらに太く（8px）
                     const wallBorder = `border-black ${wallBorderThickness}`;
                     const hitWallBorder = `border-red-500 ${wallBorderThickness}`; // ぶつかった壁用（赤色）
-                    const pathBorder = smallView ? 'border-gray-300' : 'border-gray-300';
-                    const outerBorderThickness = smallView ? 'border-2' : 'border-8'; // 外枠も太くした
+                    const pathBorderThickness = smallView ? 'border-4' : 'border-[14px]'; // マス目の格子線の太さをより太く（14px）
+                    const pathBorder = `border-gray-400 ${pathBorderThickness}`; // マス目の格子線をさらに太く
 
                     // 上の境界線を設定
                     if (r === 0) borderStyles += ` border-t ${outerBorderThickness} border-t-black`;
