@@ -28,6 +28,32 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
     const currentUserName = getUsername() || "未設定ユーザー";
     const players = gameData.players || [];
     
+    // ユーザーIDからユーザー名を取得するヘルパー関数
+    const getUserNameById = (playerId) => {
+        if (playerId === userId) {
+            return currentUserName;
+        }
+        
+        // まずplayerStatesから取得を試行
+        if (gameData?.playerStates?.[playerId]?.playerName) {
+            return gameData.playerStates[playerId].playerName;
+        }
+        
+        // 次にplayerNamesマップから取得を試行
+        if (gameData?.playerNames && gameData.playerNames[playerId]) {
+            return gameData.playerNames[playerId];
+        }
+        
+        // プレイヤー番号でフォールバック
+        const playerIndex = players.indexOf(playerId);
+        if (playerIndex !== -1) {
+            return playerId === userId ? "あなた" : `相手`;
+        }
+        
+        // フォールバック：Firebase IDの一部を表示
+        return `プレイヤー${playerId.substring(0,8)}...`;
+    };
+    
     // 初期表示は自分が攻略した迷路、なければ最初のプレイヤーの迷路
     const [selectedMazeOwner, setSelectedMazeOwner] = useState(() => {
         const myPlayerState = gameData.playerStates?.[userId];
@@ -184,7 +210,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {players.map((playerId, index) => {
                             const playerState = gameData.playerStates[playerId];
-                            const playerName = playerId === userId ? currentUserName : `プレイヤー${index + 1}`;
+                            const playerName = getUserNameById(playerId);
                             return (
                                 <div key={playerId} className="bg-white p-3 rounded border">
                                     <div className="flex items-center justify-between">
@@ -225,7 +251,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                     className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     {players.map((playerId, index) => {
-                                        const playerName = playerId === userId ? currentUserName : `プレイヤー${index + 1}`;
+                                        const playerName = getUserNameById(playerId);
                                         return (
                                             <option key={playerId} value={playerId}>
                                                 {playerName}の迷路
@@ -335,13 +361,13 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                 {/* 迷路情報 */}
                                 <div className="mt-4 p-3 bg-blue-50 rounded">
                                     <h4 className="font-semibold text-blue-800 mb-2">
-                                        {selectedMazeOwner === userId ? currentUserName : `プレイヤー${players.indexOf(selectedMazeOwner) + 1}`}の迷路
+                                        {getUserNameById(selectedMazeOwner)}の迷路
                                     </h4>
                                     <div className="text-sm text-blue-700 space-y-1">
                                         <p>• 総壁数: {currentDisplayMaze.walls?.length || 0}個</p>
                                         <p>• アクティブ壁数: {(currentDisplayMaze.walls || []).filter(w => w.active === true).length}個</p>
                                         <p>• ゴール位置: ({currentDisplayMaze.goal?.r || 0}, {currentDisplayMaze.goal?.c || 0})</p>
-                                        <p>• 作成者: {selectedMazeOwner === userId ? currentUserName : `プレイヤー${players.indexOf(selectedMazeOwner) + 1}`}</p>
+                                        <p>• 作成者: {getUserNameById(selectedMazeOwner)}</p>
                                     </div>
                                     
                                     {/* 選択されたプレイヤーの攻略情報 */}
@@ -351,7 +377,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                                             <div className="text-sm text-blue-700 space-y-1">
                                                 <p>• 攻略者: {(() => {
                                                     const solverPlayerId = players.find(pid => gameData.playerStates[pid]?.assignedMazeOwnerId === selectedMazeOwner);
-                                                    return solverPlayerId === userId ? currentUserName : `プレイヤー${players.indexOf(solverPlayerId) + 1}`;
+                                                    return getUserNameById(solverPlayerId);
                                                 })()}</p>
                                                 <p>• 見つけたマスの数: {Object.keys(selectedPlayerState.revealedCells || {}).length}個</p>
                                                 <p>• 最終位置: ({selectedPlayerState.position?.r || 0}, {selectedPlayerState.position?.c || 0})</p>
@@ -388,7 +414,7 @@ const ReviewModeScreen = ({ gameData, mazeData, allMazeData = {}, userId, gameId
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                 {players.map((playerId, index) => {
                                     const playerState = gameData.playerStates[playerId];
-                                    const playerName = playerId === userId ? currentUserName : `プレイヤー${index + 1}`;
+                                    const playerName = getUserNameById(playerId);
                                     const revealedCount = Object.keys(playerState?.revealedCells || {}).length;
                                     
                                     return (
