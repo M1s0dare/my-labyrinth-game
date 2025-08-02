@@ -1567,7 +1567,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 mb-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
-                        スタンダードモード (二人対戦)
+                        {gameData?.mode === '4player' ? '四人対戦モード' : '二人対戦モード'}
                         {debugMode && <span className="text-yellow-600 ml-2 text-base sm:text-lg">🔧 DEBUG ({currentUserName})</span>}
                     </h1>
                     <button
