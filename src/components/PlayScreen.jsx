@@ -59,6 +59,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // バトル処理中フラグ（重複実行防止）
     const [isBattleProcessing, setIsBattleProcessing] = useState(false);
     
+    // バトル結果ポップアップ（当事者のみに表示）
+    const [showBattleResultPopup, setShowBattleResultPopup] = useState(false);
+    const [battleResultData, setBattleResultData] = useState(null);
+    
+    // バトル待機ポップアップ（当事者用 - 相手の入力待ち）
+    const [showBattleWaitingPopup, setShowBattleWaitingPopup] = useState(false);
+    
     // ホームに戻る確認ダイアログ
     const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
     
@@ -108,7 +115,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const currentUserName = debugMode ? getUserNameById(effectiveUserId) : (getUsername() || "未設定ユーザー");
 
     // 追加: 不足している変数の定義（デバッグモードでは切り替えられたプレイヤーの権限で判定）
-    const isMyStandardTurn = gameData?.currentTurnPlayerId === (debugMode ? effectiveUserId : userId) && gameType === 'standard';
+    const isMyStandardTurn = gameData?.currentTurnPlayerId === (debugMode ? effectiveUserId : userId) && 
+                            gameType === 'standard' && 
+                            !(debugMode ? effectivePlayerState : myPlayerState)?.goalTime; // ゴール済みの場合はターンなし
     const inStandardBattleBetting = (debugMode ? effectivePlayerState : myPlayerState)?.inBattleWith;
 
     // 迷路データの読み込み（デバッグモードでは表示確認のため他プレイヤーデータも読み込み）
@@ -191,6 +200,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         // デバッグモードでは切り替えられたプレイヤーとして操作
         const canMove = isMyStandardTurn && !inStandardBattleBetting;
         if (!canMove || isMoving || !canPressButton) return;
+
+        // ゴール済みプレイヤーは移動不可
+        const currentPlayerState = debugMode ? effectivePlayerState : myPlayerState;
+        if (currentPlayerState?.goalTime) {
+            console.log("🏁 [Movement] Goal player cannot move");
+            return;
+        }
 
         console.log("🚶 [Movement] Starting move:", {
             direction,
@@ -358,9 +374,16 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
         
         try {
-            // 四人対戦モードでのバトル発生チェック
+            // 四人対戦モードでのバトル発生チェック（ゴールマス以外でのみ発生）
             let battleOpponent = null;
-            if (gameData?.mode === '4player') {
+            let isGoalPosition = false;
+            
+            // ゴール判定を先に行う
+            if (targetMazeData && newR === targetMazeData.goal.r && newC === targetMazeData.goal.c) {
+                isGoalPosition = true;
+            }
+            
+            if (gameData?.mode === '4player' && !isGoalPosition) {
                 // 現在アクティブなバトルがないことを確認
                 const hasActiveBattle = gameData.activeBattle && 
                                        gameData.activeBattle.status && 
@@ -368,18 +391,36 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 
                 // アクティブなバトルがない場合のみ新しいバトルをチェック
                 if (!hasActiveBattle) {
-                    // 移動先に他のプレイヤーがいるかチェック
+                    // 移動先に他のプレイヤーがいるかチェック（ゴール済みプレイヤーを除外）
                     const otherPlayerAtSamePosition = Object.entries(gameData.playerStates || {})
-                        .filter(([pid, ps]) => pid !== operatingUserId && ps.position)
+                        .filter(([pid, ps]) => {
+                            // 自分以外で、位置情報があり、ゴールしていないプレイヤーのみ
+                            return pid !== operatingUserId && 
+                                   ps.position && 
+                                   !ps.goalTime; // ゴール済みプレイヤーは除外
+                        })
                         .find(([pid, ps]) => ps.position.r === newR && ps.position.c === newC);
                     
                     if (otherPlayerAtSamePosition) {
                         battleOpponent = otherPlayerAtSamePosition[0]; // プレイヤーID
-                        console.log("🥊 [Battle] Position collision detected:", {
+                        console.log("🥊 [Battle] Position collision detected with non-goaled player:", {
                             player1: userId.substring(0, 8),
                             player2: battleOpponent.substring(0, 8),
                             position: { r: newR, c: newC }
                         });
+                    } else {
+                        // ゴール済みプレイヤーとの重複をログに記録
+                        const goaledPlayerAtSamePosition = Object.entries(gameData.playerStates || {})
+                            .filter(([pid, ps]) => pid !== operatingUserId && ps.position && ps.goalTime)
+                            .find(([pid, ps]) => ps.position.r === newR && ps.position.c === newC);
+                        
+                        if (goaledPlayerAtSamePosition) {
+                            console.log("🏁 [Battle] Skipped battle with goaled player:", {
+                                player1: userId.substring(0, 8),
+                                goaledPlayer: goaledPlayerAtSamePosition[0].substring(0, 8),
+                                position: { r: newR, c: newC }
+                            });
+                        }
                     }
                 }
             }
@@ -389,22 +430,37 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 [`playerStates.${operatingUserId}.lastMoveTime`]: serverTimestamp(),
             };
             
-            // 新しいセルの発見ボーナス
+            // 新しいセルの発見ボーナス（四人対戦のみ、初回訪問時のみ）
             let moveMessage = "";
-            if (!targetPlayerState.revealedCells[`${newR}-${newC}`]) {
+            const cellKey = `${newR}-${newC}`;
+            const revealedCells = targetPlayerState?.revealedCells || {};
+            const isFirstVisit = !revealedCells[cellKey];
+            
+            if (gameData?.mode === '4player' && isFirstVisit) {
                 updates[`playerStates.${operatingUserId}.score`] = increment(1);
-                updates[`playerStates.${operatingUserId}.revealedCells.${newR}-${newC}`] = true;
-                            if (gameData?.mode === '4player') {
-
-                moveMessage = `(${newR},${newC})に移動！ +1pt`;
+                updates[`playerStates.${operatingUserId}.revealedCells.${cellKey}`] = true;
+                moveMessage = `(${newR},${newC})に移動！ +1pt (初回訪問)`;
                 setMessage(moveMessage);
-                            }
-                            else {
-                moveMessage = `(${newR},${newC})に移動しました。`;
-                            }
+                console.log("🎯 [Points] First visit bonus awarded:", {
+                    playerId: operatingUserId.substring(0, 8),
+                    position: { r: newR, c: newC },
+                    cellKey,
+                    previouslyVisited: Object.keys(revealedCells).length
+                });
             } else {
                 moveMessage = `(${newR},${newC})に移動しました。`;
+                if (gameData?.mode === '4player' && !isFirstVisit) {
+                    moveMessage += " (訪問済み)";
+                }
                 setMessage(moveMessage);
+                console.log("🚶 [Points] No bonus - already visited or not 4-player mode:", {
+                    playerId: operatingUserId.substring(0, 8),
+                    position: { r: newR, c: newC },
+                    cellKey,
+                    isFirstVisit,
+                    mode: gameData?.mode,
+                    alreadyVisited: !isFirstVisit
+                });
             }
             
             // ゴール判定（デバッグ情報付き）
@@ -454,18 +510,30 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     setMessage("ゴール達成！");
                 }
                 
-                // リザルト画面のデータを設定
-                setTimeout(() => {
-                    setResultData({
-                        isGoal: true,
-                        rank: currentGoalCount + 1,
-                        points: goalPoints,
-                        message: rankMessage,
-                        totalScore: (targetPlayerState.score || 0) + goalPoints,
-                        goalTime: new Date()
+                // リザルト画面のデータを設定（四人対戦では3人目がゴールするまで表示しない）
+                if (gameData?.mode === '2player') {
+                    // 二人対戦：ゴールしたらすぐに結果表示
+                    setTimeout(() => {
+                        setResultData({
+                            isGoal: true,
+                            rank: currentGoalCount + 1,
+                            points: goalPoints,
+                            message: rankMessage,
+                            totalScore: (targetPlayerState.score || 0) + goalPoints,
+                            goalTime: new Date()
+                        });
+                        setShowResultModal(true);
+                    }, 1000);
+                } else if (gameData?.mode === '4player') {
+                    // 四人対戦：3人目がゴールした時点でゲーム終了、それまでは続行
+                    console.log("🏆 [Goal] 4-player mode goal achieved:", {
+                        goalOrder: currentGoalCount + 1,
+                        totalGoaled: currentGoalCount + 1,
+                        message: "ゲーム続行中（3人目のゴールまで待機）"
                     });
-                    setShowResultModal(true);
-                }, 1000);
+                    // 3人目がゴールするまではリザルト画面を表示しない
+                    // ゲーム終了判定は別のuseEffectで行う
+                }
             }
 
             // バトル発生処理
@@ -479,7 +547,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 const currentPlayerInBattle = currentPlayerState?.inBattleWith || 
                                             (gameData.activeBattle?.participants?.includes(operatingUserId));
                 
-                if (!opponentInBattle && !currentPlayerInBattle) {
+                // ゴール済みプレイヤーチェック
+                const opponentIsGoaled = opponentState?.goalTime;
+                const currentPlayerIsGoaled = currentPlayerState?.goalTime;
+                
+                if (!opponentInBattle && !currentPlayerInBattle && !opponentIsGoaled && !currentPlayerIsGoaled) {
                     console.log("🥊 [Battle] Starting new battle:", {
                         player1: operatingUserId.substring(0, 8),
                         player2: battleOpponent.substring(0, 8),
@@ -508,9 +580,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     setIsBattleModalOpen(true);
                     setMessage("バトル発生！ポイントを賭けてください。");
                 } else {
-                    console.log("⚠️ [Battle] Cannot start battle - one or both players already in battle:", {
+                    console.log("⚠️ [Battle] Cannot start battle:", {
                         currentPlayerInBattle,
-                        opponentInBattle
+                        opponentInBattle,
+                        currentPlayerIsGoaled,
+                        opponentIsGoaled,
+                        reason: opponentIsGoaled ? "opponent is goaled" : 
+                               currentPlayerIsGoaled ? "current player is goaled" :
+                               "one or both players already in battle"
                     });
                 }
             }
@@ -542,6 +619,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 // 連続移動可能のメッセージを表示
                 if (gameType === 'standard') {
                     setMessage(`${moveMessage} 連続移動可能です。`);
+                }
+            } else {
+                // ゴール到達時は自動的にターンを次のプレイヤーに移す
+                if (gameType === 'standard') {
+                    console.log("🏁 [Goal] Auto-advancing turn after goal achievement");
+                    setTimeout(() => {
+                        advanceStandardTurn();
+                    }, 1500); // 1.5秒後にターン進行
                 }
             }
             
@@ -641,21 +726,51 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 const winnerName = getUserNameById(winner);
                 const loserName = getUserNameById(loser);
                 
-                // 全員にバトル結果を通知
-                await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！ (${player1Bet} vs ${player2Bet})`);
+                // 当事者にバトル結果ポップアップを表示
+                if (winner === userId || loser === userId) {
+                    setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
+                    setBattleResultData({
+                        isWinner: winner === userId,
+                        myBet: winner === userId ? 
+                            (player1 === userId ? player1Bet : player2Bet) : 
+                            (player1 === userId ? player1Bet : player2Bet),
+                        opponentBet: winner === userId ? 
+                            (player1 === userId ? player2Bet : player1Bet) : 
+                            (player1 === userId ? player2Bet : player1Bet),
+                        opponentName: winner === userId ? loserName : winnerName,
+                        isDraw: false
+                    });
+                    setShowBattleResultPopup(true);
+                }
+                
+                // 全員にバトル結果を通知（ポイント数は非表示）
+                await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！`);
                 await sendSystemChatMessage(`💀 ${loserName}は次のターン行動不能になります。`);
                 
-                // 個人メッセージ
+                // 個人メッセージ（当事者にはポイント数を表示）
                 if (winner === userId) {
-                    setMessage(`🏆 バトル勝利！ +5pt (${player1Bet} vs ${player2Bet})`);
+                    setMessage(`🏆 バトル勝利！ +5pt`);
                 } else if (loser === userId) {
-                    setMessage(`💀 バトル敗北... 次のターン行動不能 (${player1Bet} vs ${player2Bet})`);
+                    setMessage(`💀 バトル敗北... 次のターン行動不能`);
                 } else {
                     setMessage(`⚔️ バトル終了: ${winnerName}の勝利`);
                 }
             } else {
-                await sendSystemChatMessage(`🤝 バトル結果: 引き分け (${player1Bet} vs ${player2Bet})`);
-                setMessage(`🤝 バトル引き分け (${player1Bet} vs ${player2Bet})`);
+                // 当事者に引き分け結果ポップアップを表示
+                if (battle.participants.includes(userId)) {
+                    setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
+                    setBattleResultData({
+                        isWinner: false,
+                        myBet: player1 === userId ? player1Bet : player2Bet,
+                        opponentBet: player1 === userId ? player2Bet : player1Bet,
+                        opponentName: getUserNameById(player1 === userId ? player2 : player1),
+                        isDraw: true
+                    });
+                    setShowBattleResultPopup(true);
+                }
+                
+                await sendSystemChatMessage(`🤝 バトル結果: 引き分け`);
+                setMessage(`🤝 バトル引き分け`);
             }
             
             await updateDoc(gameDocRef, updates);
@@ -806,6 +921,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         // バトル関連のリセット
         setShowBattleWaitDialog(false);
         setBattleParticipants([]);
+        setShowBattleResultPopup(false);
+        setBattleResultData(null);
+        setShowBattleWaitingPopup(false);
         
         // 5. デバッグモード関連の状態をリセット
         setDebugCurrentPlayerId(userId);
@@ -1127,8 +1245,54 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             debugMode
         });
         
-        // 自分がまだゴールしていない場合の終了条件チェック
-        if (!myPlayerState?.goalTime) {
+        // 四人対戦でのゲーム終了条件チェック（ゴール済みプレイヤーも含む）
+        if (gameData.mode === '4player' && goaledPlayers.length >= 3) {
+            // 3人以上がゴールした時点でゲーム終了
+            console.log("🏁 [GameEnd] 4-player game ended: 3 or more players reached goal");
+            
+            // 自分がゴール済みの場合
+            if (myPlayerState?.goalTime) {
+                // 自分の順位を計算
+                const myGoalTime = myPlayerState.goalTime.seconds || myPlayerState.goalTime;
+                const myRank = goaledPlayers.filter(pid => {
+                    const otherGoalTime = gameData.playerStates[pid]?.goalTime?.seconds || gameData.playerStates[pid]?.goalTime;
+                    return otherGoalTime < myGoalTime;
+                }).length + 1;
+                
+                // ゴール順位によるポイント付与の確認
+                const goalOrder = [20, 15, 10, 0]; // 1位, 2位, 3位, 4位のポイント
+                const goalPoints = goalOrder[myRank - 1] || 0;
+                
+                setTimeout(() => {
+                    setResultData({
+                        isGoal: true,
+                        rank: myRank,
+                        points: goalPoints,
+                        message: `${myRank}位でゴール達成！`,
+                        totalScore: myPlayerState?.score || 0,
+                        goalTime: new Date(myGoalTime * 1000)
+                    });
+                    setShowResultModal(true);
+                }, 1000);
+            } else {
+                // 自分がゴールしていない場合
+                const myRank = goaledPlayers.length + 1;
+                
+                setTimeout(() => {
+                    setResultData({
+                        isGoal: false,
+                        rank: myRank,
+                        points: 0,
+                        message: "ゲーム終了",
+                        totalScore: myPlayerState?.score || 0,
+                        goalTime: new Date()
+                    });
+                    setShowResultModal(true);
+                }, 2000);
+            }
+        }
+        // 二人対戦でのゲーム終了条件チェック（未ゴールプレイヤーのみ）
+        else if (!myPlayerState?.goalTime) {
             // 終了条件の判定
             let shouldShowResult = false;
             let resultMessage = "ゲーム終了";
@@ -1138,11 +1302,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 shouldShowResult = true;
                 resultMessage = "相手がゴールしました";
                 console.log("🏁 [GameEnd] 2-player game ended: opponent reached goal");
-            } else if (gameData.mode === '4player' && goaledPlayers.length >= 3) {
-                // 四人対戦：3人がゴールしたら終了
-                shouldShowResult = true;
-                resultMessage = "ゲーム終了";
-                console.log("🏁 [GameEnd] 4-player game ended: 3 players reached goal");
             }
             
             if (shouldShowResult) {
@@ -1234,15 +1393,35 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 [`playerStates.${userId}.lastMoveTime`]: serverTimestamp(),
             };
             
-            // 新しいセルの発見ボーナス
-            if (!myPlayerState.revealedCells[`${newR}-${newC}`]) {
-                if(gameData.mode==='4Player'){
+            // 新しいセルの発見ボーナス（四人対戦のみ、初回訪問時のみ）
+            const cellKey = `${newR}-${newC}`;
+            const revealedCells = myPlayerState?.revealedCells || {};
+            const isFirstVisit = !revealedCells[cellKey];
+            
+            if (gameData?.mode === '4player' && isFirstVisit) {
                 updates[`playerStates.${userId}.score`] = increment(1);
-                updates[`playerStates.${userId}.revealedCells.${newR}-${newC}`] = true;
-                setMessage(`(${newR},${newC})に移動！ +1pt`);
-                }
+                updates[`playerStates.${userId}.revealedCells.${cellKey}`] = true;
+                setMessage(`(${newR},${newC})に移動！ +1pt (初回訪問)`);
+                console.log("🎯 [Points] First visit bonus awarded:", {
+                    playerId: userId.substring(0, 8),
+                    position: { r: newR, c: newC },
+                    cellKey,
+                    previouslyVisited: Object.keys(revealedCells).length
+                });
             } else {
-                setMessage(`(${newR},${newC})に移動しました。`);
+                let moveMsg = `(${newR},${newC})に移動しました。`;
+                if (gameData?.mode === '4player' && !isFirstVisit) {
+                    moveMsg += " (訪問済み)";
+                }
+                setMessage(moveMsg);
+                console.log("🚶 [Points] No bonus - already visited or not 4-player mode:", {
+                    playerId: userId.substring(0, 8),
+                    position: { r: newR, c: newC },
+                    cellKey,
+                    isFirstVisit,
+                    mode: gameData?.mode,
+                    alreadyVisited: !isFirstVisit
+                });
             }
             
             // ゴール判定
@@ -1251,18 +1430,23 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 updates.goalCount = increment(1);
                 setMessage("ゴール達成！");
                 
-                // リザルト表示
-                setTimeout(() => {
-                    setResultData({
-                        isGoal: true,
-                        rank: (gameData.goalCount || 0) + 1,
-                        points: 0,
-                        message: "ゴール達成！",
-                        totalScore: (myPlayerState.score || 0) + 1,
-                        goalTime: new Date()
-                    });
-                    setShowResultModal(true);
-                }, 1000);
+                // リザルト表示（二人対戦のみ即座に表示、四人対戦は3人目まで待機）
+                if (gameData?.mode === '2player') {
+                    setTimeout(() => {
+                        setResultData({
+                            isGoal: true,
+                            rank: (gameData.goalCount || 0) + 1,
+                            points: 0,
+                            message: "ゴール達成！",
+                            totalScore: (myPlayerState.score || 0) + 1,
+                            goalTime: new Date()
+                        });
+                        setShowResultModal(true);
+                    }, 1000);
+                } else if (gameData?.mode === '4player') {
+                    // 四人対戦：3人目がゴールするまでゲーム続行
+                    console.log("🏆 [Goal] 4-player mode goal achieved, game continues until 3 players finish");
+                }
             }
             
             await updateDoc(gameDocRef, updates);
@@ -1303,7 +1487,27 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 
                 const freshData = freshGameSnap.data();
                 const currentPlayerIndex = freshData.players.indexOf(freshData.currentTurnPlayerId);
-                const nextPlayerIndex = (currentPlayerIndex + 1) % freshData.players.length;
+                
+                // ゴール済みプレイヤーをスキップして次のプレイヤーを探す
+                let nextPlayerIndex = (currentPlayerIndex + 1) % freshData.players.length;
+                let attempts = 0;
+                const maxAttempts = freshData.players.length;
+                
+                // ゴールしていないプレイヤーを見つけるまでループ
+                while (attempts < maxAttempts) {
+                    const candidatePlayerId = freshData.players[nextPlayerIndex];
+                    const candidatePlayerState = freshData.playerStates[candidatePlayerId];
+                    
+                    // ゴールしていないプレイヤーが見つかった場合
+                    if (!candidatePlayerState?.goalTime) {
+                        break;
+                    }
+                    
+                    // 次のプレイヤーを試す
+                    nextPlayerIndex = (nextPlayerIndex + 1) % freshData.players.length;
+                    attempts++;
+                }
+                
                 const nextPlayerId = freshData.players[nextPlayerIndex];
                 
                 const updates = {
@@ -1313,7 +1517,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 
                 // ターン切り替えメッセージ
                 const nextPlayerName = getUserNameById(nextPlayerId);
-                console.log(`🔄 Turn switched to: ${nextPlayerName}`);
+                console.log(`🔄 Turn switched to: ${nextPlayerName} (skipped ${attempts} goaled players)`);
                 
                 // ゴール判定とゲーム終了チェック
                 const goaledPlayers = freshData.players.filter(pid => 
@@ -1391,9 +1595,29 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             
             // 当事者の場合：バトルモーダルを表示、待機ダイアログを非表示
             if (isParticipant && !isBattleModalOpen && battle.status === 'betting') {
-                console.log("🥊 [Battle] Opening battle modal for participant");
-                setIsBattleModalOpen(true);
-                setShowBattleWaitDialog(false); // 念のため待機ダイアログを閉じる
+                // 自分がまだポイント選択していない場合：バトルモーダルを表示
+                const myBetStatus = gameData.playerStates[currentUserId]?.battleBet;
+                const hasMyBet = myBetStatus !== undefined && myBetStatus !== null;
+                
+                if (!hasMyBet) {
+                    console.log("🥊 [Battle] Opening battle modal for participant");
+                    setIsBattleModalOpen(true);
+                    setShowBattleWaitDialog(false); // 念のため待機ダイアログを閉じる
+                    setShowBattleWaitingPopup(false); // 待機ポップアップも閉じる
+                } else {
+                    // 自分はポイント選択済みだが、相手がまだの場合：待機ポップアップを表示
+                    const allParticipantsBetted = battle.participants?.every(pid => 
+                        gameData.playerStates[pid]?.battleBet !== undefined && 
+                        gameData.playerStates[pid]?.battleBet !== null
+                    );
+                    
+                    if (!allParticipantsBetted && !showBattleWaitingPopup) {
+                        console.log("🥊 [Battle] Showing waiting popup for participant who already bet");
+                        setShowBattleWaitingPopup(true);
+                        setIsBattleModalOpen(false);
+                        setShowBattleWaitDialog(false);
+                    }
+                }
             }
             
             // 非当事者の場合：バトルモーダルを閉じ、待機ダイアログを表示
@@ -1433,8 +1657,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 setShowBattleWaitDialog(false);
                 setBattleParticipants([]);
             }
+            if (showBattleWaitingPopup) {
+                console.log("🥊 [Battle] Closing battle waiting popup - no active battle");
+                setShowBattleWaitingPopup(false);
+            }
         }
-    }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen, showBattleWaitDialog, debugMode, effectiveUserId]);
+    }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen, showBattleWaitDialog, showBattleWaitingPopup, debugMode, effectiveUserId]);
 
     // ゲーム中断状態監視
     useEffect(() => {
@@ -2202,6 +2430,73 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         <div className="text-center text-xs text-gray-400">
                             このダイアログは自動的に閉じられます
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* バトル待機ポップアップ（当事者用 - 相手の入力待ち） */}
+            {showBattleWaitingPopup && (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center justify-center">
+                            <Clock size={28} className="mr-2"/>
+                            お待ちください
+                        </h2>
+                        
+                        <div className="mb-4">
+                            <p className="text-lg font-medium mb-2">相手のポイント選択待ちです</p>
+                            <p className="text-sm text-gray-600">
+                                相手がポイントを選択すると、自動的にバトル結果が表示されます
+                            </p>
+                        </div>
+                        
+                        <div className="flex justify-center mb-4">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                        </div>
+                        
+                        <p className="text-xs text-gray-400">
+                            このダイアログは自動的に閉じられます
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* バトル結果ポップアップ（当事者のみ表示） */}
+            {showBattleResultPopup && battleResultData && (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center justify-center">
+                            <Swords size={28} className="mr-2"/>
+                            {battleResultData.isDraw ? '🤝 引き分け' : 
+                             battleResultData.isWinner ? '🏆 勝利！' : '💀 敗北...'}
+                        </h2>
+                        
+                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                            <p className="text-lg font-semibold mb-2">バトル結果</p>
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="font-medium">あなた:</span>
+                                <span className="text-lg font-bold">{battleResultData.myBet}pt</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="font-medium">{battleResultData.opponentName}:</span>
+                                <span className="text-lg font-bold">{battleResultData.opponentBet}pt</span>
+                            </div>
+                        </div>
+                        
+                        {!battleResultData.isDraw && (
+                            <p className="text-sm text-gray-600 mb-4">
+                                {battleResultData.isWinner ? 
+                                    "勝利ボーナス: +5pt" : 
+                                    "次のターンは行動不能になります"}
+                            </p>
+                        )}
+                        
+                        <button 
+                            onClick={() => setShowBattleResultPopup(false)}
+                            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                        >
+                            確認
+                        </button>
                     </div>
                 </div>
             )}

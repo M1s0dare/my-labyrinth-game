@@ -17,24 +17,24 @@ import { Swords, MinusCircle, PlusCircle } from 'lucide-react';
  * @param {number} myCurrentScore - 現在のスコア
  */
 const BattleModal = ({ isOpen, onClose, onBet, maxBet, opponentName, myName, myCurrentScore }) => {
-    const [betAmount, setBetAmount] = useState(1);  // 賭け金の状態管理
+    const [betAmount, setBetAmount] = useState(0);  // 賭け金の状態管理
 
     // モーダルが開いた時の初期化処理
     useEffect(() => {
         if (isOpen) {
-            setBetAmount(1); // 開いた時に賭け金をリセット
+            setBetAmount(0); // 開いた時に賭け金をリセット
         }
     }, [isOpen]);
 
     // モーダルが閉じている場合は何も表示しない
     if (!isOpen) return null;
 
-    // 実際の最大賭け金を計算（最低1は賭けられる）
-    const actualMaxBet = Math.max(1, myCurrentScore);
+    // 実際の最大賭け金を計算（0から賭けられる）
+    const actualMaxBet = Math.max(0, myCurrentScore);
     
     // 賭け金を増減する関数
     const incrementBet = () => setBetAmount(prev => Math.min(prev + 1, actualMaxBet));
-    const decrementBet = () => setBetAmount(prev => Math.max(1, prev - 1));
+    const decrementBet = () => setBetAmount(prev => Math.max(0, prev - 1));
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
@@ -47,11 +47,11 @@ const BattleModal = ({ isOpen, onClose, onBet, maxBet, opponentName, myName, myC
                 </p>
                 <p className="mb-4 text-sm text-gray-600">あなたの現在ポイント: {myCurrentScore}pt</p>
                 <p className="mb-1 font-semibold">ポイントを賭けてください</p>
-                <p className="mb-4 text-xs text-gray-500">(最小: 1pt, 最大: {actualMaxBet}pt)</p>
+                <p className="mb-4 text-xs text-gray-500">(最小: 0pt, 最大: {actualMaxBet}pt)</p>
                 <div className="flex items-center justify-center space-x-3 my-4">
                     <button 
                         onClick={decrementBet} 
-                        disabled={betAmount <= 1} 
+                        disabled={betAmount <= 0} 
                         className="p-2 bg-gray-300 hover:bg-gray-400 rounded-full disabled:opacity-50 transition-colors"
                         aria-label="ベットを減らす"
                     >
