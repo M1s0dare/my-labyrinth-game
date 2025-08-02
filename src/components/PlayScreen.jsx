@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     doc, updateDoc, serverTimestamp, arrayUnion,
-    orderBy, limit, runTransaction, increment, collection, addDoc, query, onSnapshot
+    orderBy, limit, runTransaction, increment, collection, addDoc, query, onSnapshot, deleteField
 } from 'firebase/firestore';
 import {
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight, User,
