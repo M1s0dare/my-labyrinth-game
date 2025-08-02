@@ -129,26 +129,11 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
             <p className="help-description">対戦中のチャットで使える発言テンプレートです。クリックしてコピーできます。</p>
             <div className="template-sections">
                 <div className="template-section">
-                    <h3>🤝 協力・連携</h3>
-                    <ul>
-                        <li onClick={() => copyToClipboard("一緒に進みませんか？")}>「一緒に進みませんか？」</li>
-                        <li onClick={() => copyToClipboard("協力して突破しましょう！")}>「協力して突破しましょう！」</li>
-                        <li onClick={() => copyToClipboard("チームワークで頑張りましょう")}>「チームワークで頑張りましょう」</li>
-                        <li onClick={() => copyToClipboard("みんなで力を合わせよう")}>「みんなで力を合わせよう」</li>
-                        <li onClick={() => copyToClipboard("同盟を組みましょう")}>「同盟を組みましょう」</li>
-                    </ul>
-                </div>
-                
-                <div className="template-section">
                     <h3>❓ 質問・相談</h3>
                     <ul>
-                        <li onClick={() => copyToClipboard("どこに進む予定ですか？")}>「どこに進む予定ですか？」</li>
-                        <li onClick={() => copyToClipboard("この壁は誰が置きましたか？")}>「この壁は誰が置きましたか？」</li>
-                        <li onClick={() => copyToClipboard("ゴールまでの道は見つかりましたか？")}>「ゴールまでの道は見つかりましたか？」</li>
                         <li onClick={() => copyToClipboard("今の状況を教えてください")}>「今の状況を教えてください」</li>
-                        <li onClick={() => copyToClipboard("ヒントが欲しいです")}>「ヒントが欲しいです」</li>
-                        <li onClick={() => copyToClipboard("どちらの方向がいいと思いますか？")}>「どちらの方向がいいと思いますか？」</li>
-                        <li onClick={() => copyToClipboard("戦略を相談しませんか？")}>「戦略を相談しませんか？」</li>
+                        <li onClick={() => copyToClipboard("ゴールまでのヒントが欲しいです")}>「ゴールまでのヒントが欲しいです」</li>
+                        <li onClick={() => copyToClipboard("どの方向がいいと思いますか？")}>「どの方向がいいと思いますか？」</li>
                     </ul>
                 </div>
                 
@@ -156,12 +141,8 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                     <h3>📢 情報共有</h3>
                     <ul>
                         <li onClick={() => copyToClipboard("この道は行き止まりです")}>「この道は行き止まりです」</li>
-                        <li onClick={() => copyToClipboard("ここから進めそうです")}>「ここから進めそうです」</li>
-                        <li onClick={() => copyToClipboard("壁を置きました")}>「壁を置きました」</li>
                         <li onClick={() => copyToClipboard("ゴールが見えました！")}>「ゴールが見えました！」</li>
                         <li onClick={() => copyToClipboard("注意：この先は危険かも")}>「注意：この先は危険かも」</li>
-                        <li onClick={() => copyToClipboard("トラップを発見しました")}>「トラップを発見しました」</li>
-                        <li onClick={() => copyToClipboard("重要な情報があります")}>「重要な情報があります」</li>
                     </ul>
                 </div>
                 
@@ -170,7 +151,6 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                     <ul>
                         <li onClick={() => copyToClipboard("負けませんよ！")}>「負けませんよ！」</li>
                         <li onClick={() => copyToClipboard("追いついてみせます")}>「追いついてみせます」</li>
-                        <li onClick={() => copyToClipboard("今度は阻止します")}>「今度は阻止します」</li>
                         <li onClick={() => copyToClipboard("戦略を変更します")}>「戦略を変更します」</li>
                         <li onClick={() => copyToClipboard("手強い相手ですね")}>「手強い相手ですね」</li>
                     </ul>
