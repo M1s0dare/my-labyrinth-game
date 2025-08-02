@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-    doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove,
-    orderBy, limit, runTransaction, Timestamp, increment, collection, addDoc, query, onSnapshot, deleteField
+    doc, updateDoc, serverTimestamp, arrayUnion,
+    orderBy, limit, runTransaction, increment, collection, addDoc, query, onSnapshot
 } from 'firebase/firestore';
 import {
-    ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Eye, EyeOff, MessageSquare, Send, Users, User,
-    CheckCircle, XCircle, Swords, RefreshCw, ListChecks,
-    MinusCircle, PlusCircle, Award, Target, Clock, Users2, Handshake, Zap, Search, Move,
-    Hourglass, ThumbsUp, ThumbsDown, Skull, MapPin, UserCheck, UserX, ShieldCheck, ShieldOff,
-    Megaphone, MicOff, Trophy
+    ArrowUp, ArrowDown, ArrowLeft, ArrowRight, User,
+    Swords, Clock, Trophy, HelpCircle, Mic, AlertTriangle, Heart
 } from 'lucide-react';
 
 import { db, appId } from '../firebase';
@@ -21,11 +18,7 @@ import ChatSection from './ChatSection';
 import SpeechTemplateModal from './SpeechTemplateModal';
 import DebugControls from './DebugControls';
 import {
-    STANDARD_GRID_SIZE, EXTRA_GRID_SIZE, NEGOTIATION_TYPES, SABOTAGE_TYPES,
-    DECLARATION_PHASE_DURATION, CHAT_PHASE_DURATION, RESULT_PUBLICATION_DURATION, ACTION_EXECUTION_DELAY,
-    EXTRA_MODE_PERSONAL_TIME_LIMIT, PERSONAL_TIME_PENALTY_INTERVAL,
-    PERSONAL_TIME_PENALTY_POINTS, DECLARATION_TIMEOUT_PENALTY, ALLIANCE_VIOLATION_PENALTY,
-    SPECIAL_EVENT_INTERVAL_ROUNDS, SPECIAL_EVENTS // SECRET_OBJECTIVES, WALL_COUNT are used in other files
+    STANDARD_GRID_SIZE
 } from '../constants';
 import { formatTime, isPathPossible, getUsername } from '../utils';
 
@@ -44,23 +37,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [isBattleModalOpen, setIsBattleModalOpen] = useState(false);
     const [viewingMazeOwnerId, setViewingMazeOwnerId] = useState(null); // 四人対戦で右側に表示する迷路の作成者ID
     const [gameType, setGameType] = useState('standard');
-    const [phaseTimeLeft, setPhaseTimeLeft] = useState(null);
-    const [overallTimeLeft, setOverallTimeLeft] = useState(null);
-    const [selectedAction, setSelectedAction] = useState(null);
-    const [actionTarget, setActionTarget] = useState(null);
-    const [sabotageType, setSabotageType] = useState(null);
-    const [negotiationDetails, setNegotiationDetails] = useState({ type: null, duration: null, conditions: ""});
-    const [showActionDetails, setShowActionDetails] = useState(false);
-    const [trapPlacementCoord, setTrapPlacementCoord] = useState(null);
-    const [isPlacingTrap, setIsPlacingTrap] = useState(false);
-    const [sharedWalls, setSharedWalls] = useState([]);
-    const [sharedScoutLogs, setSharedScoutLogs] = useState([]);
-    const personalTimerIntervalRef = useRef(null);
-    const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
-    // const [actionLogDisplay, setActionLogDisplay] = useState([]); // Using gameData.actionLog directly
-
-    const [selectedMoveTarget, setSelectedMoveTarget] = useState(null);
-    const [isSelectingMoveTarget, setIsSelectingMoveTarget] = useState(false);
     
     // ヘルプオーバーレイ表示状態
     const [showHelpOverlay, setShowHelpOverlay] = useState(false);
@@ -100,8 +76,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const effectiveUserId = debugMode ? debugCurrentPlayerId : userId;
     const effectivePlayerState = debugMode ? debugPlayerStates[debugCurrentPlayerId] : myPlayerState;
 
-    // ユーザー名を取得
-    const currentUserName = getUsername() || "未設定ユーザー";
+    // ユーザー名を取得（デバッグモード時は切り替えられたプレイヤーの名前を取得）
+    const currentUserName = debugMode ? getUserNameById(effectiveUserId) : (getUsername() || "未設定ユーザー");
     
     // プレイヤー名のマッピング
     const playerNames = gameData?.playerNames || {};
@@ -134,7 +110,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
     // 追加: 不足している変数の定義（デバッグモードでは切り替えられたプレイヤーの権限で判定）
     const isMyStandardTurn = gameData?.currentTurnPlayerId === (debugMode ? effectiveUserId : userId) && gameType === 'standard';
-    const inStandardBattleBetting = (debugMode ? effectivePlayerState : myPlayerState)?.inBattleWith && gameType === 'standard';
+    const inStandardBattleBetting = (debugMode ? effectivePlayerState : myPlayerState)?.inBattleWith;
 
     // 迷路データの読み込み（デバッグモードでは表示確認のため他プレイヤーデータも読み込み）
     useEffect(() => {
@@ -763,10 +739,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setIsCleaningUp(true);
         
         // 2. 全てのタイマーを確実にクリア
-        if (personalTimerIntervalRef.current) {
-            clearInterval(personalTimerIntervalRef.current);
-            personalTimerIntervalRef.current = null;
-        }
+        // 各種タイマーのクリーンアップは個別に行う
         
         // 3. ローカルストレージを完全クリア
         const keysToRemove = [
@@ -794,20 +767,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setIsBattleModalOpen(false);
         setViewingMazeOwnerId(null);
         setGameType('standard');
-        setPhaseTimeLeft(null);
-        setOverallTimeLeft(null);
-        setSelectedAction(null);
-        setActionTarget(null);
-        setSabotageType(null);
-        setNegotiationDetails({ type: null, duration: null, conditions: ""});
-        setShowActionDetails(false);
-        setTrapPlacementCoord(null);
-        setIsPlacingTrap(false);
-        setSharedWalls([]);
-        setSharedScoutLogs([]);
-        setIsGameOverModalOpen(false);
-        setSelectedMoveTarget(null);
-        setIsSelectingMoveTarget(false);
         setShowHelpOverlay(false);
         setShowSpeechTemplate(false);
         setShowReviewMode(false);
@@ -909,39 +868,27 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
     // handleTrapCoordinateSelect関数の追加
     const handleTrapCoordinateSelect = (r, c) => {
-        if (isPlacingTrap && selectedAction === 'sabotage' && sabotageType === 'trap') {
-            setTrapPlacementCoord({ r, c });
-            setIsPlacingTrap(false);
-            setMessage(`トラップ設置座標 (${r}, ${c}) を選択しました。`);
-        }
+        // トラップ設置機能は削除済み
+        console.warn("Trap coordinate selection is deprecated");
     };
 
     // セルクリック時の処理を統合
     const handleCellClick = (r, c) => {
-        if (gameType === 'extra') {
-            // エクストラモード時の処理
-            if (isSelectingMoveTarget && selectedAction === 'move') {
-                handleCellClickForMove(r, c);
-            } else if (isPlacingTrap && selectedAction === 'sabotage' && sabotageType === 'trap') {
-                handleTrapCoordinateSelect(r, c);
-            }
-        } else if (gameType === 'standard') {
-            // スタンダードモード時の移動処理（デバッグモードでは切り替えられたプレイヤーとして操作）
-            const canMove = isMyStandardTurn && !inStandardBattleBetting && canPressButton;
-            if (canMove) {
-                const targetPlayerState = debugMode ? effectivePlayerState : myPlayerState;
-                const { r: currentR, c: currentC } = targetPlayerState.position;
-                const isAdjacent = (Math.abs(r - currentR) === 1 && c === currentC) || 
-                                  (Math.abs(c - currentC) === 1 && r === currentR);
-                
-                if (isAdjacent) {
-                    if (r < currentR) handleStandardMove('up');
-                    else if (r > currentR) handleStandardMove('down');
-                    else if (c < currentC) handleStandardMove('left');
-                    else if (c > currentC) handleStandardMove('right');
-                } else {
-                    setMessage("隣接するセルにのみ移動できます。");
-                }
+        // スタンダードモード時の移動処理（デバッグモードでは切り替えられたプレイヤーとして操作）
+        const canMove = isMyStandardTurn && !inStandardBattleBetting && canPressButton;
+        if (canMove) {
+            const targetPlayerState = debugMode ? effectivePlayerState : myPlayerState;
+            const { r: currentR, c: currentC } = targetPlayerState.position;
+            const isAdjacent = (Math.abs(r - currentR) === 1 && c === currentC) || 
+                              (Math.abs(c - currentC) === 1 && r === currentR);
+            
+            if (isAdjacent) {
+                if (r < currentR) handleStandardMove('up');
+                else if (r > currentR) handleStandardMove('down');
+                else if (c < currentC) handleStandardMove('left');
+                else if (c > currentC) handleStandardMove('right');
+            } else {
+                setMessage("隣接するセルにのみ移動できます。");
             }
         }
     };
@@ -950,7 +897,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     useEffect(() => {
         const handleKeyPress = (event) => {
             // デバッグモードでは切り替えられたプレイヤーとして操作
-            if (gameType === 'standard' && isMyStandardTurn && !inStandardBattleBetting && canPressButton) {
+            if (isMyStandardTurn && !inStandardBattleBetting && canPressButton) {
                 switch(event.key) {
                     case 'ArrowUp': 
                     case 'w': 
@@ -982,7 +929,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [gameType, isMyStandardTurn, inStandardBattleBetting, handleStandardMove, canPressButton]);
+    }, [isMyStandardTurn, inStandardBattleBetting, handleStandardMove, canPressButton]);
 
     // ターン変更時に移動ボタンの押せる状態をリセット
     useEffect(() => {
@@ -1031,7 +978,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     }
                     
                     if (data.status === 'finished') {
-                        setIsGameOverModalOpen(true);
                         // ゲーム終了時のリザルト表示
                         if (!showResultModal) {
                             const myState = data.playerStates?.[userId];
@@ -1113,27 +1059,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             unsubscribe();
         };
     }, [gameId, userId, setScreen, isCleaningUp]); // isCleaningUpを依存関係に追加
-
-    // handleCellClickForMove関数の追加
-    const handleCellClickForMove = (r, c) => {
-        if (isSelectingMoveTarget && selectedAction === 'move') {
-            // 現在位置からの移動可能性をチェック（隣接セルかどうか）
-            const { r: currentR, c: currentC } = myPlayerState.position;
-            const isAdjacent = (Math.abs(r - currentR) === 1 && c === currentC) || 
-                              (Math.abs(c - currentC) === 1 && r === currentR);
-            
-            // グリッドサイズを適切に取得
-            const gridSize = mazeToPlayData?.gridSize || currentGridSize;
-            
-            if (isAdjacent && r >= 0 && r < gridSize && c >= 0 && c < gridSize) {
-                setSelectedMoveTarget({ r, c });
-                setIsSelectingMoveTarget(false);
-                setMessage(`移動先 (${r}, ${c}) を選択しました。`);
-            } else {
-                setMessage("隣接するセルにのみ移動できます。");
-            }
-        }
-    };
 
     // チャットメッセージを読み込む useEffect を追加
     useEffect(() => {
@@ -1223,7 +1148,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     }, [gameData?.playerStates, gameData?.players, gameData?.mode, myPlayerState?.goalTime, showResultModal, myPlayerState?.score]);
 
-    const currentGridSize = gameType === 'extra' ? EXTRA_GRID_SIZE : STANDARD_GRID_SIZE;
+    const currentGridSize = STANDARD_GRID_SIZE;
 
     const sendSystemChatMessage = useCallback(async (text) => {
         if (!gameId) return;
@@ -1232,300 +1157,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             await addDoc(chatCollRef, { senderId: "system", senderName: "システム", text: text, timestamp: serverTimestamp() });
         } catch (error) { console.error("Error sending system chat message:", error); }
     }, [gameId]);
-
-    const finalizeGameExtraMode = useCallback(async (gId, currentGData) => {
-        if (!gId || !currentGData || currentGData.status === 'finished') return;
-        sendSystemChatMessage("ゲーム終了！最終ポイント計算中...");
-        const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gId);
-        
-        try {
-            await runTransaction(db, async (transaction) => {
-                const freshGameSnap = await transaction.get(gameDocRef);
-                if (!freshGameSnap.exists()) throw new Error("Game not found for finalization!");
-                const freshGData = freshGameSnap.data();
-                if (freshGData.status === 'finished') return; 
-
-                let finalPlayerStates = JSON.parse(JSON.stringify(freshGData.playerStates)); 
-
-                freshGData.players.forEach(pid => {
-                    const pState = finalPlayerStates[pid];
-                    if (pState.personalTimeUsed > EXTRA_MODE_PERSONAL_TIME_LIMIT) {
-                        const overtimeSeconds = pState.personalTimeUsed - EXTRA_MODE_PERSONAL_TIME_LIMIT;
-                        const penaltyCount = Math.floor(overtimeSeconds / PERSONAL_TIME_PENALTY_INTERVAL);
-                        if (penaltyCount > 0) {
-                            const totalPenalty = penaltyCount * PERSONAL_TIME_PENALTY_POINTS;
-                            pState.score += totalPenalty;
-                        }
-                    }
-                    finalPlayerStates[pid].scoreBeforeFullAllianceBonus = pState.score;
-                });
-
-                let rankedPlayers = freshGData.players.map(pid => ({
-                    id: pid,
-                    score: finalPlayerStates[pid].score || 0,
-                    goalTime: finalPlayerStates[pid].goalTime ? (finalPlayerStates[pid].goalTime.toMillis ? finalPlayerStates[pid].goalTime.toMillis() : finalPlayerStates[pid].goalTime) : Infinity,
-                    allianceId: finalPlayerStates[pid].allianceId,
-                    secretObjective: finalPlayerStates[pid].secretObjective,
-                    betrayedAllies: finalPlayerStates[pid].betrayedAllies || [],
-                })).sort((a, b) => {
-                    if (a.goalTime !== b.goalTime) return a.goalTime - b.goalTime;
-                    return b.score - a.score; 
-                });
-                rankedPlayers.forEach((p, index) => { finalPlayerStates[p.id].rank = index + 1; });
-                
-                const goalPointsExtra = [50, 30, 20, 10];
-                rankedPlayers.forEach((p, index) => {
-                    if (p.goalTime !== Infinity) { finalPlayerStates[p.id].score += goalPointsExtra[index] || 0; }
-                });
-
-                freshGData.players.forEach(pid => {
-                    const pState = finalPlayerStates[pid]; 
-                    const objective = pState.secretObjective;
-                    if (objective && !objective.achieved && objective.gameEndCondition) {
-                        let achievedNow = false;
-                        switch(objective.id) {
-                            case "COMP_TARGET_LAST": if (objective.targetPlayerId && finalPlayerStates[objective.targetPlayerId]?.rank === freshGData.players.length) achievedNow = true; break;
-                            case "COMP_SOLO_TOP3": if (!pState.allianceId && pState.rank <= 3) achievedNow = true; break; 
-                            case "COOP_ALLY_TOP2": if (pState.allianceId && objective.targetPlayerId && finalPlayerStates[objective.targetPlayerId]?.allianceId === pState.allianceId && pState.rank <= 2 && finalPlayerStates[objective.targetPlayerId]?.rank <= 2) achievedNow = true; break;
-                            case "SAB_BETRAY_AND_WIN": if (pState.betrayedAllies.length > 0) { const higherThanAllBetrayed = pState.betrayedAllies.every(bAllyId => finalPlayerStates[bAllyId] ? pState.rank < finalPlayerStates[bAllyId].rank : true); if (higherThanAllBetrayed) achievedNow = true; } break;
-                            default: break;
-                        }
-                        if (achievedNow) { pState.score += objective.points; pState.secretObjective.achieved = true; /* systemMsg */ }
-                    }
-                    if (pState.allianceId) {
-                        const currentAlliance = freshGData.alliances.find(a => a.id === pState.allianceId && a.status !== 'betrayed'); 
-                        if (currentAlliance) {
-                            const higherAlly = currentAlliance.members.find(memberId => memberId !== pid && finalPlayerStates[memberId] && finalPlayerStates[memberId].rank < pState.rank);
-                            if (higherAlly) { pState.score += 10; /* systemMsg */ }
-                        }
-                    }
-                    const wasEverAllied = freshGData.alliances.some(a => a.members.includes(pid)); 
-                    if (pState.rank === 1 && !wasEverAllied) { pState.score += 25; /* systemMsg */ }
-                });
-                
-                const fullAlliances = freshGData.alliances.filter(a => a.type === 'full_alliance' && a.status !== 'betrayed');
-                fullAlliances.forEach(alliance => {
-                    const memberPidsInAlliance = alliance.members.filter(mId => finalPlayerStates[mId]); 
-                    if (memberPidsInAlliance.length > 0) {
-                        const totalScoreOfMembersForDistribution = memberPidsInAlliance.reduce((sum, pid_member) => sum + (finalPlayerStates[pid_member].scoreBeforeFullAllianceBonus !== undefined ? finalPlayerStates[pid_member].scoreBeforeFullAllianceBonus : finalPlayerStates[pid_member].score), 0);
-                        const pointsToDistribute = Math.floor(totalScoreOfMembersForDistribution * 0.5);
-                        const sharePerMember = memberPidsInAlliance.length > 0 ? Math.floor(pointsToDistribute / memberPidsInAlliance.length) : 0;
-                        
-                        memberPidsInAlliance.forEach(pid_member => {
-                            const originalScoreForCalc = finalPlayerStates[pid_member].scoreBeforeFullAllianceBonus !== undefined ? finalPlayerStates[pid_member].scoreBeforeFullAllianceBonus : finalPlayerStates[pid_member].score;
-                            finalPlayerStates[pid_member].score = Math.floor(originalScoreForCalc * 0.5) + sharePerMember;
-                        });
-                    }
-                });
-
-                transaction.update(gameDocRef, {
-                    playerStates: finalPlayerStates, status: "finished",
-                    currentExtraModePhase: "gameOver", phaseTimerEnd: null, currentActionPlayerId: null,
-                });
-            });
-        } catch (error) {
-            console.error("Error finalizing game:", error);
-            sendSystemChatMessage("ゲーム終了処理エラー: " + error.message);
-        }
-    }, [sendSystemChatMessage, gameType]);
-
-    const advanceExtraModePhase = useCallback(async (gId, currentGData) => { 
-        if (!gId || !currentGData || currentGData.gameType !== 'extra' || currentGData.status === 'finished') return;
-        const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gId);
-        let updates = {}; 
-        let nextPhase = currentGData.currentExtraModePhase;
-        
-        // フェーズ進行ロジックを実装
-        switch (currentGData.currentExtraModePhase) {
-            case 'declaration':
-                // 宣言フェーズから実行フェーズへ
-                const allDeclared = currentGData.players.every(pid => 
-                    currentGData.playerStates[pid]?.hasDeclaredThisTurn
-                );
-                
-                if (allDeclared) {
-                    nextPhase = 'actionExecution';
-                    const firstActionPlayer = currentGData.players[0];
-                    updates = {
-                        currentExtraModePhase: nextPhase,
-                        currentActionPlayerId: firstActionPlayer,
-                        phaseTimerEnd: Timestamp.fromMillis(Date.now() + ACTION_EXECUTION_DELAY)
-                    };
-                    sendSystemChatMessage("全員の宣言が完了！アクション実行フェーズに移行します。");
-                }
-                break;
-                
-            case 'actionExecution':
-                // 次のプレイヤーのアクション実行、または次のラウンドへ
-                const currentPlayerIndex = currentGData.players.indexOf(currentGData.currentActionPlayerId);
-                const nextPlayerIndex = currentPlayerIndex + 1;
-                
-                if (nextPlayerIndex < currentGData.players.length) {
-                    // 次のプレイヤーのアクション実行
-                    const nextActionPlayer = currentGData.players[nextPlayerIndex];
-                    updates = {
-                        currentActionPlayerId: nextActionPlayer,
-                        phaseTimerEnd: Timestamp.fromMillis(Date.now() + ACTION_EXECUTION_DELAY)
-                    };
-                } else {
-                    // 全員のアクション実行完了、次のラウンドへ
-                    const newRoundNumber = (currentGData.roundNumber || 1) + 1;
-                    
-                    // ゲーム終了判定
-                    const goaledPlayers = currentGData.players.filter(pid => 
-                        currentGData.playerStates[pid]?.goalTime
-                    );
-                    
-                    if (goaledPlayers.length >= Math.ceil(currentGData.players.length / 2) || 
-                        newRoundNumber > 20) { // 最大20ラウンド
-                        await finalizeGameExtraMode(gId, currentGData);
-                        return;
-                    }
-                    
-                    // 次のラウンド準備
-                    updates = {
-                        currentExtraModePhase: 'declaration',
-                        currentActionPlayerId: null,
-                        roundNumber: newRoundNumber,
-                        phaseTimerEnd: Timestamp.fromMillis(Date.now() + DECLARATION_PHASE_DURATION)
-                    };
-                    
-                    // プレイヤー状態をリセット
-                    currentGData.players.forEach(pid => {
-                        updates[`playerStates.${pid}.hasDeclaredThisTurn`] = false;
-                        updates[`playerStates.${pid}.actionExecutedThisTurn`] = false;
-                        updates[`playerStates.${pid}.declaredAction`] = null;
-                    });
-                    
-                    sendSystemChatMessage(`ラウンド ${newRoundNumber} 開始！宣言フェーズが始まります。`);
-                }
-                break;
-                
-            default:
-                console.log("Unknown phase:", currentGData.currentExtraModePhase);
-                return;
-        }
-        
-        if (Object.keys(updates).length > 0) {
-            try {
-                await updateDoc(gameDocRef, updates);
-            } catch (error) {
-                console.error("Error advancing extra mode phase:", error);
-            }
-        }
-    }, [finalizeGameExtraMode, sendSystemChatMessage]);
-
-    // 不足している関数の実装
-    const executeMyDeclaredAction = useCallback(async () => {
-        if (!gameData || !myPlayerState?.declaredAction || myPlayerState.actionExecutedThisTurn) return;
-        
-        const action = myPlayerState.declaredAction;
-        const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
-        
-        try {
-            let updates = {
-                [`playerStates.${userId}.actionExecutedThisTurn`]: true
-            };
-            
-            switch (action.type) {
-                case 'move':
-                    if (action.details?.targetCell) {
-                        const { r, c } = action.details.targetCell;
-                        updates[`playerStates.${userId}.position`] = { r, c };
-                        updates[`playerStates.${userId}.lastMoveTime`] = serverTimestamp();
-                        
-                        // 新しいセルの発見ボーナス
-                        if (!myPlayerState.revealedCells[`${r}-${c}`]) {
-                            updates[`playerStates.${userId}.score`] = increment(2); // エクストラモードは2pt
-                            updates[`playerStates.${userId}.revealedCells.${r}-${c}`] = true;
-                        }
-                        
-                        // ゴール判定
-                        if (mazeToPlayData && r === mazeToPlayData.goal.r && c === mazeToPlayData.goal.c && !myPlayerState.goalTime) {
-                            updates[`playerStates.${userId}.goalTime`] = serverTimestamp();
-                            updates.goalCount = increment(1);
-                            
-                            // エクストラモードのリザルト表示
-                            setTimeout(() => {
-                                setResultData({
-                                    isGoal: true,
-                                    rank: (gameData.goalCount || 0) + 1,
-                                    points: 50, // エクストラモードのゴールボーナス
-                                    message: "ゴール達成！",
-                                    totalScore: (myPlayerState.score || 0) + 50,
-                                    goalTime: new Date()
-                                });
-                                setShowResultModal(true);
-                            }, 1000);
-                        }
-                        
-                        setMessage(`(${r},${c})に移動しました！`);
-                    }
-                    break;
-                    
-                case 'scout':
-                    if (action.targetId && gameData.playerStates[action.targetId]) {
-                        const targetPos = gameData.playerStates[action.targetId].position;
-                        updates[`playerStates.${userId}.scoutLogs`] = arrayUnion({
-                            targetId: action.targetId,
-                            position: targetPos,
-                            round: gameData.roundNumber
-                        });
-                        setMessage(`${getUserNameById(action.targetId)}の位置を偵察しました。`);
-                    }
-                    break;
-                    
-                case 'sabotage':
-                    if (action.details?.sabotageType && action.targetId) {
-                        const sabotageEffect = {
-                            type: action.details.sabotageType,
-                            sourceId: userId,
-                            expiryRound: (gameData.roundNumber || 1) + 2 // 2ラウンド継続
-                        };
-                        
-                        updates[`playerStates.${action.targetId}.sabotageEffects`] = arrayUnion(sabotageEffect);
-                        setMessage(`${getUserNameById(action.targetId)}に妨害を実行しました。`);
-                    }
-                    break;
-                    
-                case 'negotiate':
-                    if (action.targetId && action.details?.negotiation) {
-                        // 交渉処理は相手の承認が必要なため、提案として記録
-                        const negotiationProposal = {
-                            fromId: userId,
-                            toId: action.targetId,
-                            type: action.details.negotiation.type,
-                            conditions: action.details.negotiation.conditions,
-                            round: gameData.roundNumber,
-                            status: 'pending'
-                        };
-                        
-                        updates[`negotiations.${userId}-${action.targetId}-${Date.now()}`] = negotiationProposal;
-                        setMessage(`${getUserNameById(action.targetId)}に交渉を提案しました。`);
-                    }
-                    break;
-                    
-                case 'wait':
-                    setMessage("待機しました。");
-                    break;
-                    
-                default:
-                    setMessage("不明なアクションです。");
-                    break;
-            }
-            
-            await updateDoc(gameDocRef, updates);
-            
-            // アクション実行後、次のフェーズに進行
-            setTimeout(() => {
-                advanceExtraModePhase(gameId, gameData);
-            }, 1500);
-            
-        } catch (error) {
-            console.error("Error executing action:", error);
-            setMessage("アクション実行に失敗しました。");
-        }
-    }, [gameData, myPlayerState, userId, gameId, mazeToPlayData, advanceExtraModePhase]);
 
     // 不足している関数の実装
     const handleStandardMoveImproved = async (direction) => {
@@ -1716,22 +1347,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     }, [gameType, gameData, gameId]);
 
-    // アクション実行フェーズでの自動実行
-    useEffect(() => {
-        if (gameType === 'extra' && 
-            gameData?.currentExtraModePhase === 'actionExecution' && 
-            gameData?.currentActionPlayerId === userId && 
-            myPlayerState?.declaredAction && 
-            !myPlayerState?.actionExecutedThisTurn) {
-            
-            const executeWithDelay = setTimeout(() => {
-                executeMyDeclaredAction();
-            }, 1000); // 1秒待ってから実行
-            
-            return () => clearTimeout(executeWithDelay);
-        }
-    }, [gameData?.currentExtraModePhase, gameData?.currentActionPlayerId, myPlayerState?.actionExecutedThisTurn, executeMyDeclaredAction, gameType, userId]);
-
     // バトル状態監視
     useEffect(() => {
         if (gameData?.activeBattle && gameData?.mode === '4player') {
@@ -1833,9 +1448,22 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const handleSendChatMessage = async () => {
         if (!chatInput.trim() || !gameId) return;
         
-        // 通信妨害チェック
+        // デバッグモードでは切り替えられたプレイヤーとしてチャットを送信
+        const sendingUserId = debugMode ? effectiveUserId : userId;
+        const sendingUserName = debugMode ? getUserNameById(effectiveUserId) : currentUserName;
+        
+        console.log("💬 [Chat] Sending message:", {
+            debugMode,
+            sendingUserId: sendingUserId.substring(0, 8),
+            sendingUserName,
+            actualUserId: userId.substring(0, 8),
+            message: chatInput.substring(0, 20) + (chatInput.length > 20 ? "..." : "")
+        });
+        
+        // 通信妨害チェック（デバッグモードでは切り替えられたプレイヤーの状態をチェック）
+        const targetPlayerState = debugMode ? effectivePlayerState : myPlayerState;
         if (gameData?.specialEventActive?.type === 'communication_jam' ||
-            myPlayerState?.sabotageEffects?.some(eff => eff.type === 'info_jam' && eff.expiryRound >= gameData?.roundNumber)) {
+            targetPlayerState?.sabotageEffects?.some(eff => eff.type === 'info_jam' && eff.expiryRound >= gameData?.roundNumber)) {
             setMessage("通信が妨害されています。");
             return;
         }
@@ -1844,8 +1472,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         
         try {
             await addDoc(chatCollRef, {
-                senderId: userId,
-                senderName: currentUserName,
+                senderId: sendingUserId,
+                senderName: sendingUserName,
                 text: chatInput,
                 timestamp: serverTimestamp()
             });
@@ -1859,168 +1487,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // 発言テンプレート選択時のハンドラー
     const handleTemplateSelect = (template) => {
         setChatInput(template);
-    };
-
-    // 不足している関数の実装 - declareSelectedAction を追加
-    const declareSelectedAction = useCallback(async () => {
-        if (!selectedAction || myPlayerState?.hasDeclaredThisTurn || gameData?.currentExtraModePhase !== 'declaration') return;
-        
-        const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
-        let actionDetails = { type: selectedAction };
-        
-        // アクションごとの詳細設定
-        switch(selectedAction) {
-            case 'move':
-                if (!selectedMoveTarget) {
-                    setMessage("移動先を選択してください。");
-                    return;
-                }
-                actionDetails.details = { targetCell: selectedMoveTarget };
-                break;
-            case 'sabotage':
-                if (!sabotageType || !actionTarget) {
-                    setMessage("妨害タイプと対象を選択してください。");
-                    return;
-                }
-                actionDetails.targetId = actionTarget;
-                actionDetails.details = { sabotageType };
-                if (sabotageType === 'trap' && trapPlacementCoord) {
-                    actionDetails.details.trapCoordinates = trapPlacementCoord;
-                }
-                break;
-            case 'negotiate':
-                if (!actionTarget || !negotiationDetails.type) {
-                    setMessage("交渉対象とタイプを選択してください。");
-                    return;
-                }
-                actionDetails.targetId = actionTarget;
-                actionDetails.details = { negotiation: negotiationDetails };
-                break;
-            case 'scout':
-                if (!actionTarget) {
-                    setMessage("偵察対象を選択してください。");
-                    return;
-                }
-                actionDetails.targetId = actionTarget;
-                break;
-            case 'wait':
-                // 待機は追加の詳細不要
-                break;
-            default:
-                setMessage("無効なアクションです。");
-                return;
-        }
-        
-        try {
-            await updateDoc(gameDocRef, {
-                [`playerStates.${userId}.declaredAction`]: actionDetails,
-                [`playerStates.${userId}.hasDeclaredThisTurn`]: true,
-                [`declarations.${userId}`]: { ...actionDetails, submittedAt: serverTimestamp() }
-            });
-            
-            setMessage(`${selectedAction}を宣言しました！`);
-            setSelectedAction(null);
-            setActionTarget(null);
-            setSabotageType(null);
-            setSelectedMoveTarget(null);
-            setIsSelectingMoveTarget(false);
-            setTrapPlacementCoord(null);
-            setNegotiationDetails({ type: null, duration: null, conditions: "" });
-            setShowActionDetails(false);
-            
-        } catch (error) {
-            console.error("Error declaring action:", error);
-            setMessage("アクション宣言に失敗しました。");
-        }
-    }, [selectedAction, selectedMoveTarget, actionTarget, sabotageType, negotiationDetails, trapPlacementCoord, myPlayerState, gameData, userId, gameId]);
-
-    // 移動先選択の開始
-    const startMoveTargetSelection = () => {
-        if (selectedAction === 'move') {
-            setIsSelectingMoveTarget(true);
-            setMessage("移動先の隣接セルをクリックしてください。");
-        }
-    };
-
-    // ActionButtonコンポーネントを追加
-    const ActionButton = ({ actionType, label, icon: Icon, currentSelection, onSelect }) => {
-        const isSelected = currentSelection === actionType;
-        return (
-            <button
-                onClick={() => {
-                    onSelect(actionType);
-                    setShowActionDetails(true);
-                }}
-                className={`p-2 rounded-lg border-2 text-sm transition-all duration-200 ${
-                    isSelected 
-                        ? 'border-blue-500 bg-blue-100 text-blue-800' 
-                        : 'border-gray-300 bg-white hover:border-blue-300 hover:bg-blue-50'
-                }`}
-            >
-                <div className="flex items-center justify-center space-x-1">
-                    <Icon size={16}/>
-                    <span>{label}</span>
-                </div>
-            </button>
-        );
-    };
-
-    // エクストラモード用のアクション詳細コンポーネント
-    const renderActionDetails = () => {
-        if (!showActionDetails || !selectedAction) return null;
-
-        return (
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg shadow-inner text-sm">
-                <h4 className="font-semibold mb-2">アクション詳細: {selectedAction}</h4>
-                
-                {selectedAction === 'move' && (
-                    <div className="space-y-2">
-                        <p>隣接するセルに移動します。</p>
-                        {!selectedMoveTarget ? (
-                            <button 
-                                onClick={startMoveTargetSelection}
-                                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white p-2 rounded"
-                            >
-                                移動先を選択
-                            </button>
-                        ) : (
-                            <div className="space-y-2">
-                                <p className="text-green-600">移動先: ({selectedMoveTarget.r}, {selectedMoveTarget.c})</p>
-                                <div className="flex space-x-2">
-                                    <button 
-                                        onClick={() => {
-                                            setSelectedMoveTarget(null);
-                                            setIsSelectingMoveTarget(false);
-                                        }}
-                                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white p-1 rounded text-xs"
-                                    >
-                                        リセット
-                                    </button>
-                                    <button 
-                                        onClick={declareSelectedAction}
-                                        className="flex-1 bg-green-500 hover:bg-green-600 text-white p-1 rounded text-xs"
-                                    >
-                                        宣言
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-                
-                {selectedAction === 'wait' && (
-                    <div className="space-y-2">
-                        <p>何もしないことを宣言します。</p>
-                        <button 
-                            onClick={declareSelectedAction}
-                            className="w-full bg-green-500 hover:bg-green-600 text-white p-1 rounded text-xs"
-                        >
-                            待機を宣言
-                        </button>
-                    </div>
-                )}
-            </div>
-        );
     };
 
     // デバッグモード用のプレイヤー切り替えコンポーネント
@@ -2068,11 +1534,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     </div>
                     <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded border">
                         📝 デバッグ機能: 
-                        • ゲーム機能は通常モードと完全同一（移動・バトル・終了など）<br/>
-                        • プレイヤー切り替えで相手の画面表示確認と操作が可能<br/>
-                        • 壁の表示状態や発見済みセルの確認が可能<br/>
-                        • 切り替えたプレイヤーとして実際に移動やバトルが実行可能<br/>
-                        • 一人でマルチプレイヤーのデバッグが可能
+                        • 完全プレイヤー視点切り替え：選択したプレイヤーとして完全に操作<br/>
+                        • チャット送信時も切り替えたプレイヤー名で送信される<br/>
+                        • ターン表示、ポイント表示なども切り替えたプレイヤー視点<br/>
+                        • 移動、バトル、ゲーム終了すべて切り替えたプレイヤーとして実行<br/>
+                        • 一人で複数プレイヤーの完全なマルチプレイ体験が可能
                     </div>
                 </div>
             </div>
@@ -2105,8 +1571,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 mb-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
-                        {gameType === 'standard' ? 'スタンダードモード (二人対戦)' : 'エクストラモード'}
-                        {debugMode && <span className="text-yellow-600 ml-2 text-base sm:text-lg">🔧 DEBUG</span>}
+                        スタンダードモード (二人対戦)
+                        {debugMode && <span className="text-yellow-600 ml-2 text-base sm:text-lg">🔧 DEBUG ({currentUserName})</span>}
                     </h1>
                     <button
                         onClick={handleExitButtonClick}
@@ -2118,10 +1584,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 </div>
             </div>
 
-            {/* メインコンテンツ：スタンダードモードとエクストラモードで分岐 */}
-            {gameType === 'standard' ? (
-                // スタンダードモード（二人対戦）レスポンシブレイアウト: 左（攻略中迷路・相手作成）・中央（操作・チャット）・右（自分作成・相手攻略）
-                <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-12 gap-2 sm:gap-4 h-full min-h-[calc(100vh-200px)]">{/* レスポンシブ対応: lg以上で3列、xl以上で詳細レイアウト */}
+            {/* メインコンテンツ：スタンダードモード（二人対戦） */}
+            {/* スタンダードモード（二人対戦）レスポンシブレイアウト: 左（攻略中迷路・相手作成）・中央（操作・チャット）・右（自分作成・相手攻略） */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-12 gap-2 sm:gap-4 h-full min-h-[calc(100vh-200px)]">{/* レスポンシブ対応: lg以上で3列、xl以上で詳細レイアウト */}
                     {/* 左側：自分が攻略する迷路（相手が作ったもの） */}
                     <div className="lg:col-span-1 xl:col-span-4 bg-white rounded-lg shadow-md p-2 sm:p-4 h-fit">
                         <h2 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 text-center">
@@ -2142,7 +1607,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                             hitWalls={debugMode ? (gameData?.playerStates?.[effectiveUserId]?.hitWalls || []) : (myPlayerState?.hitWalls || hitWalls)}
                                             onCellClick={handleCellClick}
                                             gridSize={currentGridSize}
-                                            sharedWallsFromAllies={sharedWalls}
+                                            sharedWallsFromAllies={[]}
                                             highlightPlayer={true}
                                             smallView={false}
                                             showAllPlayerPositions={false}
@@ -2196,7 +1661,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                     </div>
                                     <div className="text-left sm:text-right text-xs sm:text-sm">
                                         <p className="text-blue-700">
-                                            {debugMode ? `プレイヤー ${effectiveUserId.substring(0,8)}...` : currentUserName}の状態
+                                            {currentUserName}の状態
                                         </p>
                                         <p className="text-blue-600">
                                             位置: ({effectivePlayerState?.position?.r || 0}, {effectivePlayerState?.position?.c || 0})
@@ -2226,7 +1691,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                     }`}
                                                 >
                                                     <span className={isCurrentPlayer ? 'font-bold text-green-700' : 'text-gray-700'}>
-                                                        {isCurrentPlayer ? currentUserName : `プレイヤー${index + 1}`}
+                                                        {isCurrentPlayer ? currentUserName : getUserNameById(playerId)}
                                                         {isCurrentTurn && <span className="ml-1 text-blue-600">📍</span>}
                                                         {isGoaled && <span className="ml-1 text-green-600">🏁</span>}
                                                     </span>
@@ -2470,21 +1935,32 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                     otherPlayers={(() => {
                                                         // 二人対戦モードで、相手が自分の迷路を攻略している場合の位置を表示
                                                         if (gameData?.mode === '2player' && gameData?.players && gameData?.playerStates) {
-                                                            return gameData.players
-                                                                .filter(playerId => playerId !== effectiveUserId) // 自分以外
-                                                                .map(playerId => {
-                                                                    const playerState = gameData.playerStates[playerId];
-                                                                    // 相手が自分の迷路を攻略している場合（自分が迷路作成者）
-                                                                    if (playerState?.assignedMazeOwnerId === effectiveUserId && playerState?.position) {
-                                                                        return {
-                                                                            id: playerId,
-                                                                            position: playerState.position,
-                                                                            name: getUserNameById(playerId)
-                                                                        };
-                                                                    }
-                                                                    return null;
-                                                                })
-                                                                .filter(player => player !== null); // nullを除外
+                                                            // 自分以外のプレイヤー（相手）を探す
+                                                            const opponentId = gameData.players.find(playerId => playerId !== (debugMode ? effectiveUserId : userId));
+                                                            if (opponentId) {
+                                                                const opponentState = gameData.playerStates[opponentId];
+                                                                // 相手が自分の迷路を攻略している場合
+                                                                if (opponentState?.assignedMazeOwnerId === (debugMode ? effectiveUserId : userId) && opponentState?.position) {
+                                                                    console.log("🎯 [RightMaze] Showing opponent position on my maze:", {
+                                                                        opponentId: opponentId.substring(0, 8),
+                                                                        opponentPosition: opponentState.position,
+                                                                        assignedMazeOwner: opponentState.assignedMazeOwnerId.substring(0, 8),
+                                                                        myUserId: (debugMode ? effectiveUserId : userId).substring(0, 8)
+                                                                    });
+                                                                    return [{
+                                                                        id: opponentId,
+                                                                        position: opponentState.position,
+                                                                        name: getUserNameById(opponentId)
+                                                                    }];
+                                                                } else {
+                                                                    console.log("🔍 [RightMaze] Opponent not on my maze:", {
+                                                                        opponentId: opponentId.substring(0, 8),
+                                                                        opponentAssignedMazeOwner: opponentState?.assignedMazeOwnerId?.substring(0, 8),
+                                                                        myUserId: (debugMode ? effectiveUserId : userId).substring(0, 8),
+                                                                        opponentHasPosition: !!opponentState?.position
+                                                                    });
+                                                                }
+                                                            }
                                                         }
                                                         return []; // その他の場合は表示しない
                                                     })()}
@@ -2516,167 +1992,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     </div>
 
                 </div>
-            ) : (
-                // エクストラモードのレスポンシブレイアウト
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* メイン迷路エリア */}
-                    <div className="lg:col-span-2 order-1 lg:order-1">
-                        <div className="bg-white rounded-lg shadow-md p-4">
-                            <h2 className="text-lg font-semibold mb-4">
-                                迷路 (エクストラモード)
-                            </h2>
-
-                            {/* 迷路グリッド */}
-                            {mazeToPlayData ? (
-                                <div className="flex justify-center">
-                                    <div className="w-fit max-w-lg mx-auto">
-                                        <MazeGrid
-                                            mazeData={mazeToPlayData}
-                                            playerPosition={myPlayerState?.position}
-                                            otherPlayers={gameData?.playerStates ? 
-                                                Object.entries(gameData.playerStates)
-                                                    .filter(([pid]) => pid !== userId)
-                                                    .map(([pid, pState]) => ({ id: pid, position: pState.position })) 
-                                                : []
-                                            }
-                                            revealedCells={myPlayerState?.revealedCells || {}}
-                                            revealedPlayerWalls={myPlayerState?.revealedWalls || []}
-                                            hitWalls={myPlayerState?.hitWalls || []}
-                                            onCellClick={handleCellClick}
-                                            gridSize={currentGridSize}
-                                            sharedWalls={sharedWalls}
-                                            isSelectingMoveTarget={isSelectingMoveTarget}
-                                            selectingTrapCoord={isPlacingTrap}
-                                            onTrapCoordSelect={handleTrapCoordinateSelect}
-                                            traps={gameData?.traps || []}
-                                            highlightPlayer={true}
-                                            smallView={false}
-                                        />
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-center h-64 bg-gray-50 rounded">
-                                    <p className="text-gray-500">迷路を読み込み中...</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* サイドバー */}
-                    <div className="order-2 lg:order-2 space-y-4">
-                        {/* エクストラモードのアクション */}
-                        <div className="bg-white rounded-lg shadow-md p-4"> 
-                            <h3 className="text-lg font-semibold mb-3">エクストラアクション</h3>
-                            
-                            {gameData?.currentExtraModePhase === 'declaration' && !myPlayerState?.hasDeclaredThisTurn && (
-                                <div className="space-y-3">
-                                    {/* 操作説明 */}
-                                    <div className="p-3 bg-blue-50 rounded-lg text-sm">
-                                        <p className="font-semibold text-blue-700 mb-2">📝 操作手順:</p>
-                                        <ul className="text-blue-600 space-y-1">
-                                            <li>• <strong>移動</strong>: 移動ボタン → 隣接セルクリック → 宣言</li>
-                                            <li>• <strong>待機</strong>: 待機ボタン → 宣言</li>
-                                        </ul>
-                                    </div>
-                                    
-                                    {/* アクションボタン */}
-                                    <div className="grid grid-cols-1 gap-2">
-                                        <ActionButton actionType="move" label="移動" icon={Move} currentSelection={selectedAction} onSelect={setSelectedAction} />
-                                        <ActionButton actionType="wait" label="待機" icon={Hourglass} currentSelection={selectedAction} onSelect={setSelectedAction} />
-                                    </div>
-                                    
-                                    {/* アクション詳細表示 */}
-                                    {renderActionDetails()}
-                                </div>
-                            )}
-                            
-                            {gameData?.currentExtraModePhase === 'declaration' && myPlayerState?.hasDeclaredThisTurn && (
-                                <div className="text-center p-4 bg-green-50 rounded-lg">
-                                    <CheckCircle className="mx-auto mb-2 text-green-600" size={24}/>
-                                    <p className="text-green-600 font-semibold">宣言完了</p>
-                                    <p className="text-sm text-green-500">他プレイヤーを待っています...</p>
-                                </div>
-                            )}
-
-                            {gameData?.currentExtraModePhase === 'actionExecution' && (
-                                <div className="p-4 bg-gray-50 rounded-lg">
-                                    <h4 className="font-semibold mb-2">アクション実行中</h4>
-                                    <p className="text-sm">
-                                        現在: {gameData.currentActionPlayerId === userId ? 
-                                            <span className="text-blue-600 font-semibold">{currentUserName}</span> : 
-                                            <span className="text-orange-600 font-semibold">相手</span>
-                                        }
-                                    </p>
-                                    {gameData.currentActionPlayerId === userId && myPlayerState.declaredAction && !myPlayerState.actionExecutedThisTurn && (
-                                        <p className="text-blue-600 mt-1 text-sm">アクションを実行中...</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* プレイヤー情報 */}
-                        <div className="bg-white rounded-lg shadow-md p-4">
-                            <h3 className="text-lg font-semibold mb-3">プレイヤー情報</h3>
-                            <div className="space-y-2">
-                                {gameData?.players?.map(playerId => {
-                                    const player = gameData.playerStates[playerId];
-                                    const isCurrentPlayer = playerId === userId;
-                                    const isActivePlayer = gameData.currentActionPlayerId === playerId;
-                                    
-                                    return (
-                                        <div 
-                                            key={playerId}
-                                            className={`p-3 rounded-lg border-2 ${
-                                                isCurrentPlayer ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'
-                                            } ${isActivePlayer ? 'ring-2 ring-green-300' : ''}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center space-x-2">
-                                                    <User size={16} className={isCurrentPlayer ? 'text-blue-600' : 'text-gray-500'}/>
-                                                    <span className={`font-medium ${isCurrentPlayer ? 'text-blue-800' : 'text-gray-700'}`}>
-                                                        {isCurrentPlayer ? currentUserName : `プレイヤー ${playerId.substring(0, 8)}...`}
-                                                    </span>
-                                                    {isActivePlayer && (
-                                                        <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                                                            実行中
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-right text-sm">
-                                                    <div>スコア: {player?.score || 0}pt</div>
-                                                    <div className="text-xs text-gray-500">
-                                                        位置: ({player?.position?.r || 0}, {player?.position?.c || 0})
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* ゴール状態表示 */}
-                                            {player?.goalTime && (
-                                                <div className="mt-2 flex items-center space-x-1">
-                                                    <Trophy size={14} className="text-yellow-500"/>
-                                                    <span className="text-sm text-yellow-600 font-semibold">ゴール達成！</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* チャットエリア */}
-                        <ChatSection 
-                            chatMessages={chatMessages}
-                            chatInput={chatInput}
-                            setChatInput={setChatInput}
-                            handleSendChatMessage={handleSendChatMessage}
-                            onShowHelp={() => setShowHelpOverlay(true)}
-                            onShowTemplate={() => setShowSpeechTemplate(true)}
-                            chatLogRef={chatLogRef}
-                            title="チャット"
-                        />
-                    </div>
-                </div>
-            )}
 
             {/* バトルモーダル（当事者のみ） */}
             {isBattleModalOpen && gameData?.activeBattle && gameData.activeBattle.participants?.includes(debugMode ? effectiveUserId : userId) && (
@@ -2691,10 +2006,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 />
             )}
 
-            {isGameOverModalOpen && (
+            {/* ゲーム終了モーダル（感想戦開始用） */}
+            {gameData?.status === 'finished' && (
                 <GameOverModal
-                    isOpen={isGameOverModalOpen}
-                    onClose={() => setIsGameOverModalOpen(false)}
+                    isOpen={gameData?.status === 'finished'}
+                    onClose={() => {
+                        // ゲーム終了モーダルは自動で表示されるため、明示的な閉じる操作は不要
+                    }}
                     gameData={gameData}
                     userId={userId}
                     onReturnToLobby={() => {
