@@ -49,7 +49,7 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                         <h4>🎲 ゲーム進行</h4>
                         <ul>
                             <li>ランダムで順番を決定し、交互にターンを進行</li>
-                            <li>相手の位置が常に見える（心理戦の要素）</li>
+                            <li>相手の位置が常に見える</li>
                             <li>壁にぶつかるとターン終了</li>
                             <li>どちらかがゴールした時点でゲーム終了</li>
                         </ul>
@@ -71,8 +71,6 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                         
                         <h4>🎲 ゲーム進行</h4>
                         <ul>
-                            <li>宣言フェーズ: アクションを選択・宣言</li>
-                            <li>実行フェーズ: 宣言されたアクションを実行</li>
                             <li>他プレイヤーの位置は基本的に見えない</li>
                             <li>自分が作った迷路をプレイしている人の位置のみ見える</li>
                         </ul>
@@ -88,8 +86,7 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                         <ul>
                             <li>同じマスに複数プレイヤーが止まるとバトル発生</li>
                             <li>お互いポイントを賭けて、多く賭けた方が勝利</li>
-                            <li>敗者は次のターンを休み</li>
-                            <li>同じ相手とは1回しかバトルできない</li>
+                            <li>敗者は次のターン休み</li>
                         </ul>
                         
                         <h4>🎯 勝利条件</h4>
@@ -101,17 +98,14 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                     <h3>🎮 操作方法</h3>
                     <ul>
                         <li><strong>移動:</strong> 画面の矢印ボタン または キーボードの矢印キー/WASD</li>
-                        <li><strong>セル選択:</strong> 迷路のマスを直接クリック（隣接セルのみ）</li>
-                        <li><strong>チャット:</strong> Open Chat（全員）とClosed Chat（自分のみ）を活用</li>
-                        <li><strong>アクション:</strong> エクストラモードでは移動・偵察・妨害・交渉・待機から選択</li>
+                        <li><strong>チャット:</strong> Open Chatを活用して　情報を得よう</li>
                     </ul>
                 </div>
 
                 <div className="help-section">
                     <h3>💡 戦略のヒント</h3>
                     <ul>
-                        <li><strong>心理戦:</strong> チャットで相手を誤誘導したり、協力を持ちかけたりしよう</li>
-                        <li><strong>壁の記憶:</strong> 一度ぶつかった壁の位置を覚えておこう</li>
+                        <li><strong>心理戦:</strong> Open Chatで相手を誤誘導したり、協力を持ちかけたりしよう</li>
                         <li><strong>相手観察:</strong> 相手の動きから迷路の構造を推理しよう</li>
                         <li><strong>リスク管理:</strong> バトルでは適切な賭けポイントを選択しよう</li>
                         <li><strong>情報戦:</strong> 真実と嘘を使い分けて相手を翻弄しよう</li>
@@ -122,7 +116,6 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                     <h3>🔧 チャット機能</h3>
                     <ul>
                         <li><strong>Open Chat:</strong> 全プレイヤーに見える公開チャット</li>
-                        <li><strong>Closed Chat:</strong> 自分だけに見える非公開チャット（実際の行動入力用）</li>
                         <li><strong>テンプレート:</strong> よく使う発言のテンプレート集も活用可能</li>
                     </ul>
                 </div>
@@ -193,17 +186,6 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                         <li onClick={() => copyToClipboard("楽しかったです")}>「楽しかったです」</li>
                         <li onClick={() => copyToClipboard("素晴らしい戦略でした")}>「素晴らしい戦略でした」</li>
                         <li onClick={() => copyToClipboard("またよろしくお願いします")}>「またよろしくお願いします」</li>
-                    </ul>
-                </div>
-                
-                <div className="template-section">
-                    <h3>🎯 エクストラモード専用</h3>
-                    <ul>
-                        <li onClick={() => copyToClipboard("アクションを宣言します")}>「アクションを宣言します」</li>
-                        <li onClick={() => copyToClipboard("偵察結果を共有します")}>「偵察結果を共有します」</li>
-                        <li onClick={() => copyToClipboard("同盟の提案があります")}>「同盟の提案があります」</li>
-                        <li onClick={() => copyToClipboard("交渉しませんか？")}>「交渉しませんか？」</li>
-                        <li onClick={() => copyToClipboard("秘密目標を達成しました")}>「秘密目標を達成しました」</li>
                     </ul>
                 </div>
             </div>
