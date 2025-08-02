@@ -76,18 +76,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const effectiveUserId = debugMode ? debugCurrentPlayerId : userId;
     const effectivePlayerState = debugMode ? debugPlayerStates[debugCurrentPlayerId] : myPlayerState;
 
-    // ユーザー名を取得（デバッグモード時は切り替えられたプレイヤーの名前を取得）
-    const currentUserName = debugMode ? getUserNameById(effectiveUserId) : (getUsername() || "未設定ユーザー");
-    
     // プレイヤー名のマッピング
     const playerNames = gameData?.playerNames || {};
 
     // ユーザーIDからユーザー名を取得するヘルパー関数（デバッグ表示用も含む）
     const getUserNameById = (userId) => {
-        if (userId === effectiveUserId) {
-            return currentUserName;
-        }
-        
         // まずplayerStatesから取得を試行
         if (gameData?.playerStates?.[userId]?.playerName) {
             return gameData.playerStates[userId].playerName;
@@ -107,6 +100,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         // フォールバック：Firebase IDの一部を表示
         return `プレイヤー${userId.substring(0,8)}...`;
     };
+
+    // ユーザー名を取得（デバッグモード時は切り替えられたプレイヤーの名前を取得）
+    const currentUserName = debugMode ? getUserNameById(effectiveUserId) : (getUsername() || "未設定ユーザー");
 
     // 追加: 不足している変数の定義（デバッグモードでは切り替えられたプレイヤーの権限で判定）
     const isMyStandardTurn = gameData?.currentTurnPlayerId === (debugMode ? effectiveUserId : userId) && gameType === 'standard';
