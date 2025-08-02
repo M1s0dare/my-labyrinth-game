@@ -41,7 +41,6 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
         <div className="help-content">
             <h2>チャット発言テンプレート集</h2>
             <p className="help-description">対戦中のチャットで使える発言テンプレートです。クリックしてコピーできます。</p>
-            
             <div className="template-sections">
                 <div className="template-section">
                     <h3>🤝 協力・連携</h3>
