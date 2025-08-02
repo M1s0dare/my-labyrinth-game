@@ -90,7 +90,7 @@ const SpeechTemplateModal = ({ isOpen, onClose, onSelectTemplate }) => {
                                         <button
                                             key={templateIndex}
                                             onClick={() => handleTemplateSelect(template)}
-                                            className="text-left p-3 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg transition-colors text-sm"
+                                            className="text-left p-3 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg transition-colors text-sm text-gray-800"
                                         >
                                             {template}
                                         </button>
