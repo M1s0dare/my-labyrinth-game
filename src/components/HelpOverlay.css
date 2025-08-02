@@ -151,6 +151,28 @@
     border: 1px solid #e2e8f0;
 }
 
+.mode-details h4 {
+    margin-top: 12px;
+    margin-bottom: 8px;
+}
+
+.mode-details h4:first-child {
+    margin-top: 0;
+}
+
+.mode-details ul {
+    margin-bottom: 16px;
+}
+
+.mode-details ul:last-child {
+    margin-bottom: 0;
+}
+
+.mode-details p {
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
 /* テンプレートセクション（2ページ目用） */
 .template-sections {
     margin: 24px 0;
@@ -286,6 +308,23 @@
     
     .mode-details {
         padding: 12px;
+    }
+    
+    .mode-details h4 {
+        margin-top: 8px;
+        margin-bottom: 6px;
+    }
+    
+    .mode-details h4:first-child {
+        margin-top: 0;
+    }
+    
+    .mode-details ul {
+        margin-bottom: 12px;
+    }
+    
+    .mode-details ul:last-child {
+        margin-bottom: 0;
     }
 }
 

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, getDoc, serverTimestamp, arrayUnion, Timestamp } from 'firebase/firestore';
-import { User, Users, Info, HelpCircle, MessageSquare } from 'lucide-react';
+import { User, Users, Info, MessageSquare } from 'lucide-react';
 import { db, appId } from '../firebase';
 import { EXTRA_MODE_TOTAL_TIME_LIMIT, SECRET_OBJECTIVES } from '../constants';
 import { saveUsername, getUsername, isValidUsername } from '../utils';
@@ -411,14 +411,6 @@ const LobbyScreen = ({ setGameMode, setScreen, userId, debugMode, isOnline }) =>
                     className="hover:text-sky-400 transition-colors"
                 >
                     <MessageSquare size={20} className="inline mr-1"/> チャットヘルプ
-                </button>
-                <button 
-                    onClick={() => {
-                        showNotification('問題発生時はリロードしてください。', 'info');
-                    }} 
-                    className="hover:text-sky-400 transition-colors"
-                >
-                    <HelpCircle size={20} className="inline mr-1"/> ヘルプ
                 </button>
             </footer>
 
