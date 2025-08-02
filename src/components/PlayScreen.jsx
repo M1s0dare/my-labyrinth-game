@@ -2643,9 +2643,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                         獲得ポイント: +{resultData.points}pt
                                     </p>
                                 )}
-                                <p className="text-sm text-gray-500">
-                                    ゴール時刻: {resultData.goalTime.toLocaleTimeString()}
-                                </p>
                             </div>
                             
                             <div className="flex flex-col space-y-3">
