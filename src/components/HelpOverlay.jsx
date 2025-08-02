@@ -37,7 +37,7 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                 </div>
 
                 <div className="help-section">
-                    <h3>🏃‍♂️ スタンダードモード（2人対戦）</h3>
+                    <h3>🏃‍♂️ 2人対戦</h3>
                     <div className="mode-details">
                         <h4>📝 準備フェーズ</h4>
                         <ul>
@@ -60,7 +60,7 @@ export const HelpOverlay = ({ page = 1, onClose }) => {
                 </div>
 
                 <div className="help-section">
-                    <h3>⚔️ エクストラモード（4人対戦）</h3>
+                    <h3>⚔️ 4人対戦 </h3>
                     <div className="mode-details">
                         <h4>📝 準備フェーズ</h4>
                         <ul>
