@@ -1907,6 +1907,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                 <span className="font-bold text-orange-600">相手</span>
                                             } (ターン数: {gameData?.turnNumber || 1})
                                         </p>
+                                        {/* 四人対戦モード：ポイント情報をここに統合 */}
+                                        {gameData?.mode === '4player' && (
+                                            <p className="text-xs sm:text-sm text-yellow-600 font-semibold mt-1">
+                                                🏆 {effectivePlayerState?.score || 0}pt
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="text-left sm:text-right text-xs sm:text-sm">
                                         <p className="text-blue-700">
@@ -1918,23 +1924,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* 四人対戦モード：自分のポイントのみ表示 */}
-                            {gameData?.mode === '4player' && (
-                                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                                    <h4 className="font-semibold text-yellow-700 mb-2">🏆 あなたのポイント</h4>
-                                    <div className="text-center">
-                                        <div className="bg-green-100 border border-green-300 p-3 rounded">
-                                            <span className="font-bold text-green-700 text-lg">
-                                                {currentUserName}
-                                            </span>
-                                            <div className="font-bold text-green-700 text-xl mt-1">
-                                                {effectivePlayerState?.score || 0}pt
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         {/* 移動方法説明・移動操作 */}
