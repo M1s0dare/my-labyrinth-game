@@ -10,13 +10,15 @@ import { getFirestore, enableNetwork, disableNetwork } from 'firebase/firestore'
 // Firebase設定オブジェクト
 // プロジェクトごとに異なる設定値を含む
 const firebaseConfig = {
-  apiKey: "AIzaSyDELpL-KPlPpxAxondBu6WMPncmmtcZHs8",
-  authDomain: "my-labyrinth-game.firebaseapp.com",
-  projectId: "my-labyrinth-game",
-  storageBucket: "my-labyrinth-game.firebasestorage.app",
-  messagingSenderId: "387163715938",
-  appId: "1:387163715938:web:5d1cc5f6b5075f41f2143b"
+  apiKey: "AIzaSyBkQ11yrZ1WBYwOGM1zAAcGltj8Ig_Afk4",
+  authDomain: "labyrinthconnection-d7d49.firebaseapp.com",
+  projectId: "labyrinthconnection-d7d49",
+  storageBucket: "labyrinthconnection-d7d49.firebasestorage.app",
+  messagingSenderId: "912780396524",
+  appId: "1:912780396524:web:b7254784f2efdcb34da2c9",
+  measurementId: "G-4KGR81M23W"
 };
+
 
 // Firebase アプリケーションの初期化
 const app = initializeApp(firebaseConfig);
