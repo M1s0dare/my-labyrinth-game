@@ -1018,23 +1018,16 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     // バトル完了
                     updates.activeBattle = null;
                 } else {
-                    // 引き分けの場合：再戦を開始
-                    console.log("🤝 [Draw] Battle is a draw, starting rematch:", {
+                    // 引き分けの場合：バトル終了（何も起こらない）
+                    console.log("🤝 [Draw] Battle is a draw, ending battle:", {
                         participants: battle.participants.map(p => p.substring(0, 8)),
                         battleId: battle.battleId
                     });
                     
-                    // 引き分け回数をカウント
-                    const drawCount = (currentBattle.drawCount || 0) + 1;
-                    updates[`activeBattle.drawCount`] = drawCount;
-                    updates[`activeBattle.status`] = 'betting'; // ベッティング状態に戻す
-                    updates[`activeBattle.processing`] = false; // 処理中フラグをクリア
+                    // バトル完了（引き分けでも終了）
+                    updates.activeBattle = null;
                     
-                    // バトルベット状態はクリアして再入力可能にする（ポイントは返却しない）
-                    updates[`playerStates.${player1}.battleBet`] = null;
-                    updates[`playerStates.${player2}.battleBet`] = null;
-                    
-                    console.log("🔄 [Rematch] Draw count:", drawCount, "- Restarting betting phase");
+                    console.log("🤝 [Draw] Battle ended with no effects");
                 }
                 
                 // トランザクション内でアップデート
@@ -1101,13 +1094,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     });
                     setShowBattleResultPopup(true);
                 } else {
-                    // 引き分けの場合：再戦通知
-                    console.log("🤝 [Draw] Setting rematch notification for participant:", {
+                    // 引き分けの場合：引き分け通知
+                    console.log("🤝 [Draw] Setting draw notification for participant:", {
                         userId: localUserId.substring(0, 8)
                     });
-                    
-                    // 引き分け回数を取得
-                    const drawCount = (battle.drawCount || 0) + 1;
                     
                     setBattleResultData({
                         isWinner: false,
@@ -1115,8 +1105,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         opponentBet: player1 === localUserId ? player2Bet : player1Bet,
                         opponentName: getUserNameById(player1 === localUserId ? player2 : player1),
                         isDraw: true,
-                        isRematch: true,
-                        drawCount: drawCount
+                        isRematch: false
                     });
                     setShowBattleResultPopup(true);
                 }
@@ -1131,10 +1120,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！`);
                     await sendSystemChatMessage(`💀 ${loserName}は次のターン行動不能になります。`);
                 } else {
-                    // 引き分けの場合は再戦通知
-                    const drawCount = (battle.drawCount || 0) + 1;
-                    await sendSystemChatMessage(`🤝 バトル結果: 引き分け（${drawCount}回目）`);
-                    await sendSystemChatMessage(`🔄 再戦開始！再度ポイントを賭けてください。`);
+                    // 引き分けの場合は終了通知
+                    await sendSystemChatMessage(`🤝 バトル結果: 引き分け`);
+                    await sendSystemChatMessage(`何も起こりません。ゲーム続行です。`);
                 }
             }
             
@@ -1144,10 +1132,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             } else if (loser === localUserId) {
                 setMessage(`💀 バトル敗北... 次のターン行動不能`);
             } else if (isParticipant) {
-                const drawCount = (battle.drawCount || 0) + 1;
-                setMessage(`🤝 引き分け（${drawCount}回目）- 再戦開始！`);
+                setMessage(`🤝 引き分け - 何も起こりません`);
             } else {
-                setMessage(`⚔️ バトル終了: ${winner ? winnerName + 'の勝利' : '引き分け・再戦中'}`);
+                setMessage(`⚔️ バトル終了: ${winner ? winnerName + 'の勝利' : '引き分け'}`);
             }
             
             // バトル関連状態をリセット
@@ -2152,12 +2139,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 });
                                 setShowBattleResultPopup(true);
                             } else {
-                                // 引き分けの場合：再戦通知
-                                console.log("🤝 [Draw] Setting rematch notification for non-authorized participant:", {
+                                // 引き分けの場合：引き分け通知
+                                console.log("🤝 [Draw] Setting draw notification for non-authorized participant:", {
                                     userId: currentUserId.substring(0, 8)
                                 });
-                                
-                                const drawCount = (battle.drawCount || 0) + 1;
                                 
                                 setBattleResultData({
                                     isWinner: false,
@@ -2165,8 +2150,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                     opponentBet: player1 === currentUserId ? player2Bet : player1Bet,
                                     opponentName: getUserNameById(player1 === currentUserId ? player2 : player1),
                                     isDraw: true,
-                                    isRematch: true,
-                                    drawCount: drawCount
+                                    isRematch: false
                                 });
                                 setShowBattleResultPopup(true);
                             }
