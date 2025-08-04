@@ -874,12 +874,28 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             debugMode
         });
         
-        // 既に処理中のバトルかチェック（重複実行防止）
+        // *** 修正：より厳格な重複実行防止 ***
         if (battle.status === 'completed' || battle.processing || isBattleProcessing) {
             console.log("🥊 [Battle] Battle already processed or processing:", {
                 status: battle.status,
                 processing: battle.processing,
                 isBattleProcessing
+            });
+            return;
+        }
+        
+        // *** 修正：バトル状態の追加確認 ***
+        const allParticipantsBetted = battle.participants.every(pid => {
+            const playerBet = gameData.playerStates[pid]?.battleBet;
+            return playerBet !== undefined && playerBet !== null && playerBet >= 0;
+        });
+        
+        if (!allParticipantsBetted) {
+            console.warn("🥊 [Battle] Not all participants have valid bets, cannot process:", {
+                participants: battle.participants.map(pid => ({
+                    id: pid.substring(0, 8),
+                    bet: gameData.playerStates[pid]?.battleBet
+                }))
             });
             return;
         }
@@ -1004,7 +1020,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 transaction.update(gameDocRef, updates);
             });
             
-            // トランザクション完了後のUI更新
+            // *** 修正：すべての参加者に結果を表示するため、Firebaseデータからではなく
+            // トランザクション前のゲームデータから取得し、明示的に双方に表示処理を実行 ***
+            
             const [player1, player2] = battle.participants;
             const player1State = gameData.playerStates[player1];
             const player2State = gameData.playerStates[player2];
@@ -1022,26 +1040,32 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 loser = player1;
             }
             
-            if (winner) {
-                const winnerName = getUserNameById(winner);
-                const loserName = getUserNameById(loser);
+            const winnerName = winner ? getUserNameById(winner) : '';
+            const loserName = loser ? getUserNameById(loser) : '';
+            
+            console.log("🎉 [BattleResult] Processing battle result for all participants:", {
+                participants: battle.participants.map(p => p.substring(0, 8)),
+                player1Bet, player2Bet,
+                winner: winner?.substring(0, 8),
+                loser: loser?.substring(0, 8),
+                localUserId: localUserId.substring(0, 8),
+                isParticipant: battle.participants.includes(localUserId)
+            });
+            
+            // *** 修正：当事者判定を強化し、確実に結果表示 ***
+            const isParticipant = battle.participants.includes(localUserId);
+            
+            if (isParticipant) {
+                // 待機ポップアップを即座に閉じる
+                setShowBattleWaitingPopup(false);
                 
-                console.log("🎉 [Victory] Processing battle result display:", {
-                    winner: winner.substring(0, 8),
-                    loser: loser.substring(0, 8),
-                    localUserId: localUserId.substring(0, 8),
-                    actualUserId: userId.substring(0, 8),
-                    debugMode,
-                    isWinner: winner === localUserId,
-                    isLoser: loser === localUserId,
-                    isParticipant: winner === localUserId || loser === localUserId
-                });
-                
-                // 当事者にバトル結果ポップアップを表示
-                if (winner === localUserId || loser === localUserId) {
-                    setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
-                    // 勝利時は豪華な勝利画面を表示
-                    if (winner === localUserId) {
+                if (winner && !loser) {
+                    // 引き分けでない場合の処理
+                    const isWinner = winner === localUserId;
+                    const isLoser = loser === localUserId;
+                    
+                    if (isWinner) {
+                        // 勝者への豪華な勝利画面
                         const victoryData = {
                             opponentName: loserName,
                             myBet: player1 === localUserId ? player1Bet : player2Bet,
@@ -1049,19 +1073,22 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                             pointsGained: 5
                         };
                         
-                        console.log("🎉 [Victory] Setting victory screen data:", victoryData);
+                        console.log("🎉 [Victory] Setting victory screen for winner:", {
+                            userId: localUserId.substring(0, 8),
+                            victoryData
+                        });
                         setVictoryScreenData(victoryData);
                         
-                        // 勝利画面を少し遅らせて表示（演出効果）
+                        // 勝利画面を表示
                         setTimeout(() => {
-                            console.log("🎉 [Victory] Showing battle victory screen now");
                             setShowBattleVictoryScreen(true);
                         }, 500);
                         
-                        console.log("🎉 [Victory] Battle victory screen will be displayed for user:", localUserId.substring(0, 8));
-                    } else {
-                        // 敗北時は通常のポップアップ
-                        console.log("💀 [Defeat] Showing defeat popup for user:", localUserId.substring(0, 8));
+                    } else if (isLoser) {
+                        // 敗者への敗北ポップアップ
+                        console.log("💀 [Defeat] Setting defeat popup for loser:", {
+                            userId: localUserId.substring(0, 8)
+                        });
                         setBattleResultData({
                             isWinner: false,
                             myBet: player1 === localUserId ? player1Bet : player2Bet,
@@ -1071,32 +1098,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         });
                         setShowBattleResultPopup(true);
                     }
-                }
-                
-                // 全員にバトル結果を通知（ポイント数は非表示）
-                await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！`);
-                await sendSystemChatMessage(`💀 ${loserName}は次のターン行動不能になります。`);
-                
-                // 個人メッセージ（統一してlocalUserIdを使用）
-                if (winner === localUserId) {
-                    setMessage(`🏆 バトル勝利！ +5pt`);
-                } else if (loser === localUserId) {
-                    setMessage(`💀 バトル敗北... 次のターン行動不能`);
                 } else {
-                    setMessage(`⚔️ バトル終了: ${winnerName}の勝利`);
-                }
-            } else {
-                // 当事者に引き分け結果ポップアップを表示
-                console.log("🤝 [Draw] Processing draw result display:", {
-                    participants: battle.participants.map(p => p.substring(0, 8)),
-                    localUserId: localUserId.substring(0, 8),
-                    actualUserId: userId.substring(0, 8),
-                    debugMode,
-                    isParticipant: battle.participants.includes(localUserId)
-                });
-                
-                if (battle.participants.includes(localUserId)) {
-                    setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
+                    // 引き分けの場合（winner === null）
+                    console.log("🤝 [Draw] Setting draw popup for participant:", {
+                        userId: localUserId.substring(0, 8)
+                    });
                     setBattleResultData({
                         isWinner: false,
                         myBet: player1 === localUserId ? player1Bet : player2Bet,
@@ -1105,11 +1111,31 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         isDraw: true
                     });
                     setShowBattleResultPopup(true);
-                    console.log("🤝 [Draw] Showing draw popup for user:", localUserId.substring(0, 8));
                 }
-                
-                await sendSystemChatMessage(`🤝 バトル結果: 引き分け`);
+            }
+            
+            // チャット通知は処理権限を持つクライアントのみが送信
+            const sortedParticipants = [...battle.participants].sort();
+            const shouldSendChat = sortedParticipants[0] === localUserId;
+            
+            if (shouldSendChat) {
+                if (winner) {
+                    await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！`);
+                    await sendSystemChatMessage(`💀 ${loserName}は次のターン行動不能になります。`);
+                } else {
+                    await sendSystemChatMessage(`🤝 バトル結果: 引き分け`);
+                }
+            }
+            
+            // 個人メッセージ（全プレイヤー共通）
+            if (winner === localUserId) {
+                setMessage(`🏆 バトル勝利！ +5pt`);
+            } else if (loser === localUserId) {
+                setMessage(`💀 バトル敗北... 次のターン行動不能`);
+            } else if (isParticipant) {
                 setMessage(`🤝 バトル引き分け`);
+            } else {
+                setMessage(`⚔️ バトル終了: ${winner ? winnerName + 'の勝利' : '引き分け'}`);
             }
             
             // バトル関連状態をリセット
@@ -2021,28 +2047,48 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 }
             }
             
-            // バトル結果処理の確認
+            // *** 修正：バトル結果処理の確認（より確実な処理権限判定） ***
             if (battle.status === 'betting' && !battle.processing && !isBattleProcessing) {
                 const allParticipantsBetted = battle.participants?.every(pid => {
                     const playerBet = gameData.playerStates[pid]?.battleBet;
                     return playerBet !== undefined && playerBet !== null && playerBet >= 0;
                 });
 
+                console.log("🥊 [Battle] Checking battle completion status:", {
+                    battleStatus: battle.status,
+                    battleProcessing: battle.processing,
+                    isBattleProcessing,
+                    participants: battle.participants?.map(p => p.substring(0, 8)),
+                    bets: battle.participants?.map(pid => gameData.playerStates[pid]?.battleBet),
+                    allParticipantsBetted
+                });
+
                 if (allParticipantsBetted) {
-                    // 処理権限：参加者のうち最小userIdを持つクライアントが処理
+                    // *** 修正：より確実な処理権限判定 ***
                     const sortedParticipants = [...battle.participants].sort();
                     const shouldProcess = sortedParticipants[0] === currentUserId;
 
                     console.log("🥊 [Battle] All bets complete - processing authorization:", {
+                        battleId: battle.battleId,
                         authorizedProcessor: sortedParticipants[0].substring(0, 8),
                         currentUser: currentUserId.substring(0, 8),
-                        shouldProcess
+                        shouldProcess,
+                        timestamp: new Date().toISOString()
                     });
 
                     if (shouldProcess) {
+                        console.log("🥊 [Battle] Starting battle result processing as authorized client");
                         setIsBattleProcessing(true);
-                        processBattleResult(battle);
+                        
+                        // *** 修正：小さな遅延を追加してコンフリクト回避 ***
+                        setTimeout(() => {
+                            processBattleResult(battle);
+                        }, 100);
+                    } else {
+                        console.log("🥊 [Battle] Waiting for authorized client to process battle result");
                     }
+                } else {
+                    console.log("🥊 [Battle] Not all participants have placed bets yet");
                 }
             }
         } else if (!gameData?.activeBattle) {
@@ -2939,7 +2985,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         )}
                         
                         <button 
-                            onClick={() => setShowBattleResultPopup(false)}
+                            onClick={() => {
+                                console.log("🥊 [BattleResult] Closing battle result popup and resetting related states");
+                                setShowBattleResultPopup(false);
+                                setBattleResultData(null);
+                                // 関連するバトル状態もリセット
+                                setIsBattleModalOpen(false);
+                                setShowBattleWaitingPopup(false);
+                            }}
                             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
                         >
                             確認
@@ -3071,8 +3124,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         {/* 閉じるボタン */}
                         <button 
                             onClick={() => {
+                                console.log("🎉 [Victory] Closing victory screen and resetting related states");
                                 setShowBattleVictoryScreen(false);
                                 setVictoryScreenData(null);
+                                // 関連するバトル状態もリセット
+                                setIsBattleModalOpen(false);
+                                setShowBattleWaitingPopup(false);
+                                setBattleResultData(null);
                             }}
                             className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-4 px-6 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
                         >
