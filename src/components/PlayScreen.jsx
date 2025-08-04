@@ -382,6 +382,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             let battleOpponent = null;
             let isGoalPosition = false;
             
+            // Firestore更新用のupdatesオブジェクトを先に初期化
+            const updates = {
+                [`playerStates.${operatingUserId}.position`]: { r: newR, c: newC },
+                [`playerStates.${operatingUserId}.lastMoveTime`]: serverTimestamp(),
+            };
+            
             // ゴール判定を先に行う
             if (targetMazeData && newR === targetMazeData.goal.r && newC === targetMazeData.goal.c) {
                 isGoalPosition = true;
@@ -393,25 +399,45 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                        gameData.activeBattle.status && 
                                        ['betting', 'fighting'].includes(gameData.activeBattle.status);
                 
-                // アクティブなバトルがない場合のみ新しいバトルをチェック
-                if (!hasActiveBattle) {
+                // この位置で既にバトルが発生したかチェック（1マス1バトル制御）
+                const positionKey = `${newR}-${newC}`;
+                const battleHistoryKey = `battleHistory.${positionKey}`;
+                const hasPositionBattleHistory = gameData[battleHistoryKey];
+                
+                // アクティブなバトルがなく、この位置でまだバトルが発生していない場合のみ新しいバトルをチェック
+                if (!hasActiveBattle && !hasPositionBattleHistory) {
                     // 移動先に他のプレイヤーがいるかチェック（ゴール済みプレイヤーを除外）
-                    const otherPlayerAtSamePosition = Object.entries(gameData.playerStates || {})
+                    const otherPlayersAtSamePosition = Object.entries(gameData.playerStates || {})
                         .filter(([pid, ps]) => {
                             // 自分以外で、位置情報があり、ゴールしていないプレイヤーのみ
                             return pid !== operatingUserId && 
                                    ps.position && 
-                                   !ps.goalTime; // ゴール済みプレイヤーは除外
-                        })
-                        .find(([pid, ps]) => ps.position.r === newR && ps.position.c === newC);
-                    
-                    if (otherPlayerAtSamePosition) {
-                        battleOpponent = otherPlayerAtSamePosition[0]; // プレイヤーID
-                        console.log("🥊 [Battle] Position collision detected with non-goaled player:", {
-                            player1: userId.substring(0, 8),
-                            player2: battleOpponent.substring(0, 8),
-                            position: { r: newR, c: newC }
+                                   !ps.goalTime && // ゴール済みプレイヤーは除外
+                                   ps.position.r === newR && 
+                                   ps.position.c === newC;
                         });
+                    
+                    if (otherPlayersAtSamePosition.length > 0) {
+                        // 複数プレイヤーがいる場合はランダムに1人を選択
+                        const randomIndex = Math.floor(Math.random() * otherPlayersAtSamePosition.length);
+                        const selectedOpponent = otherPlayersAtSamePosition[randomIndex];
+                        battleOpponent = selectedOpponent[0]; // プレイヤーID
+                        
+                        console.log("🥊 [Battle] Multiple players detected, randomly selected opponent:", {
+                            movingPlayer: operatingUserId.substring(0, 8),
+                            availableOpponents: otherPlayersAtSamePosition.map(([pid]) => pid.substring(0, 8)),
+                            selectedOpponent: battleOpponent.substring(0, 8),
+                            position: { r: newR, c: newC },
+                            randomIndex,
+                            totalCandidates: otherPlayersAtSamePosition.length
+                        });
+                        
+                        // バトル履歴を記録（この位置では今後バトル発生しない）
+                        updates[battleHistoryKey] = {
+                            participants: [operatingUserId, battleOpponent].sort(),
+                            timestamp: serverTimestamp(),
+                            battleInitiator: operatingUserId
+                        };
                     } else {
                         // ゴール済みプレイヤーとの重複をログに記録
                         const goaledPlayerAtSamePosition = Object.entries(gameData.playerStates || {})
@@ -420,42 +446,76 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         
                         if (goaledPlayerAtSamePosition) {
                             console.log("🏁 [Battle] Skipped battle with goaled player:", {
-                                player1: userId.substring(0, 8),
+                                player1: operatingUserId.substring(0, 8),
                                 goaledPlayer: goaledPlayerAtSamePosition[0].substring(0, 8),
                                 position: { r: newR, c: newC }
                             });
                         }
                     }
+                } else if (hasPositionBattleHistory) {
+                    console.log("📍 [Battle] Position already had battle, skipping:", {
+                        position: { r: newR, c: newC },
+                        positionKey,
+                        movingPlayer: operatingUserId.substring(0, 8)
+                    });
                 }
             }
 
-            const updates = {
-                [`playerStates.${operatingUserId}.position`]: { r: newR, c: newC },
-                [`playerStates.${operatingUserId}.lastMoveTime`]: serverTimestamp(),
-            };
-            
             // 新しいセルの発見ボーナス（四人対戦のみ、初回訪問時のみ）
             let moveMessage = "";
             const cellKey = `${newR}-${newC}`;
             const revealedCells = targetPlayerState?.revealedCells || {};
             const isFirstVisit = !revealedCells[cellKey];
             
+            // 移動先の他プレイヤー情報を取得（メッセージ表示用）
+            const otherPlayersAtDestination = Object.entries(gameData.playerStates || {})
+                .filter(([pid, ps]) => {
+                    return pid !== operatingUserId && 
+                           ps.position && 
+                           !ps.goalTime && 
+                           ps.position.r === newR && 
+                           ps.position.c === newC;
+                });
+            
             if (gameData?.mode === '4player' && isFirstVisit) {
                 updates[`playerStates.${operatingUserId}.score`] = increment(1);
                 updates[`playerStates.${operatingUserId}.revealedCells.${cellKey}`] = true;
                 moveMessage = `(${newC +1},${newR +1})に移動！ +1pt (初回訪問)`;
+                
+                // 他プレイヤーがいる場合の追加情報
+                if (otherPlayersAtDestination.length > 0) {
+                    const otherPlayerNames = otherPlayersAtDestination.map(([pid]) => getUserNameById(pid)).join('、');
+                    if (battleOpponent) {
+                        moveMessage += ` | ${otherPlayerNames}と同じマス`;
+                    } else {
+                        moveMessage += ` | ${otherPlayerNames}と同じマス (バトル済み)`;
+                    }
+                }
+                
                 setMessage(moveMessage);
                 console.log("🎯 [Points] First visit bonus awarded:", {
                     playerId: operatingUserId.substring(0, 8),
                     position: { r: newR, c: newC },
                     cellKey,
-                    previouslyVisited: Object.keys(revealedCells).length
+                    previouslyVisited: Object.keys(revealedCells).length,
+                    otherPlayers: otherPlayersAtDestination.length
                 });
             } else {
                 moveMessage = `(${newC +1},${newR +1})に移動しました。`;
                 if (gameData?.mode === '4player' && !isFirstVisit) {
                     moveMessage += " (訪問済み)";
                 }
+                
+                // 他プレイヤーがいる場合の追加情報
+                if (otherPlayersAtDestination.length > 0) {
+                    const otherPlayerNames = otherPlayersAtDestination.map(([pid]) => getUserNameById(pid)).join('、');
+                    if (battleOpponent) {
+                        moveMessage += ` | ${otherPlayerNames}と同じマス`;
+                    } else {
+                        moveMessage += ` | ${otherPlayerNames}と同じマス (バトル済み)`;
+                    }
+                }
+                
                 setMessage(moveMessage);
                 console.log("🚶 [Points] No bonus - already visited or not 4-player mode:", {
                     playerId: operatingUserId.substring(0, 8),
@@ -463,7 +523,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     cellKey,
                     isFirstVisit,
                     mode: gameData?.mode,
-                    alreadyVisited: !isFirstVisit
+                    alreadyVisited: !isFirstVisit,
+                    otherPlayers: otherPlayersAtDestination.length
                 });
             }
             
@@ -634,10 +695,27 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     updates[`playerStates.${operatingUserId}.inBattleWith`] = battleOpponent;
                     updates[`playerStates.${battleOpponent}.inBattleWith`] = operatingUserId;
                     
-                    // オープンチャットに通知
+                    // オープンチャットに通知（ランダム選択されたことを明示）
                     const myName = getUserNameById(operatingUserId);
                     const opponentName = getUserNameById(battleOpponent);
-                    sendSystemChatMessage(`${myName}と${opponentName}でバトルが発生しました！`);
+                    
+                    // 移動先に複数プレイヤーがいた場合の説明を追加
+                    const otherPlayersAtPosition = Object.entries(gameData.playerStates || {})
+                        .filter(([pid, ps]) => {
+                            return pid !== operatingUserId && 
+                                   ps.position && 
+                                   !ps.goalTime && 
+                                   ps.position.r === newR && 
+                                   ps.position.c === newC;
+                        });
+                    
+                    if (otherPlayersAtPosition.length > 1) {
+                        const allOpponentNames = otherPlayersAtPosition.map(([pid]) => getUserNameById(pid)).join('、');
+                        sendSystemChatMessage(`🎯 (${newC + 1},${newR + 1})に複数プレイヤー検出！ランダム選択の結果...`);
+                        sendSystemChatMessage(`⚔️ ${myName} vs ${opponentName} のバトル開始！（候補: ${allOpponentNames}）`);
+                    } else {
+                        sendSystemChatMessage(`⚔️ ${myName}と${opponentName}でバトルが発生しました！`);
+                    }
                     
                     // バトルモーダルを開く（この時点では当事者のみ）
                     setIsBattleModalOpen(true);
