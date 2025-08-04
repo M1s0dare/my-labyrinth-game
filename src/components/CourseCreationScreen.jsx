@@ -403,21 +403,40 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode, isOnline
                 playerIds = shuffleArray(playerIds); // This will be the turnOrder
                 const newPlayerStates = {};
                 let assignedMazeOwners = shuffleArray([...currentData.players]); // Mazes to be assigned
-                
+
+                // --- ここから: 自分の迷路が割り当てられないようにするアルゴリズム ---
+                // 何度かシャッフルしてもダメなら、最後は強制的にswapする
+                function assignUniqueMazes(players) {
+                  let owners;
+                  let maxTries = 20;
+                  for (let i = 0; i < maxTries; i++) {
+                    owners = shuffleArray([...players]);
+                    let valid = true;
+                    for (let j = 0; j < players.length; j++) {
+                      if (players[j] === owners[j]) {
+                        valid = false;
+                        break;
+                      }
+                    }
+                    if (valid) return owners;
+                  }
+                  // 強制swap: 1人だけ自分が割り当てられている場合
+                  for (let j = 0; j < players.length; j++) {
+                    if (players[j] === owners[j]) {
+                      // swap with next (cyclic)
+                      let next = (j + 1) % players.length;
+                      [owners[j], owners[next]] = [owners[next], owners[j]];
+                    }
+                  }
+                  return owners;
+                }
+                assignedMazeOwners = assignUniqueMazes(playerIds);
+                // --- ここまで ---
+
                 let availableObjectives = gameType === 'extra' ? shuffleArray([...SECRET_OBJECTIVES]) : [];
 
                 playerIds.forEach((pid, index) => {
                     let assignedMazeOwnerId = assignedMazeOwners[index];
-                    let attempts = 0;
-                    // Ensure player doesn't get their own maze if possible
-                    while(assignedMazeOwnerId === pid && attempts < requiredPlayers && requiredPlayers > 1) {
-                        assignedMazeOwnerId = assignedMazeOwners[(index + attempts + 1) % requiredPlayers];
-                        attempts++;
-                    }
-                     if (assignedMazeOwnerId === pid && requiredPlayers > 1) { // Fallback for simple 2 player or rare 4 player case
-                        assignedMazeOwnerId = assignedMazeOwners[(index + 1) % requiredPlayers]; // Assign next in shuffled list
-                     }
-
 
                     let secretObjective = null;
                     if (gameType === 'extra' && availableObjectives.length > 0) {

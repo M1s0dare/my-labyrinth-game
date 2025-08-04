@@ -819,37 +819,32 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // バトル結果処理
     const processBattleResult = async (battle) => {
         if (!battle || !battle.participants || battle.participants.length !== 2) return;
-        
+        // デバッグモード時はeffectiveUserIdで判定
+        const localUserId = debugMode ? effectiveUserId : userId;
         // 既に処理中のバトルかチェック（重複実行防止）
         if (battle.status === 'completed' || battle.processing || isBattleProcessing) return;
-        
         // 追加の重複防止：バトルIDチェック
         const battleId = battle.battleId;
         if (!battleId) {
             console.warn("🥊 [Battle] No battleId found, skipping processing");
             return;
         }
-        
         // 既に処理済みのバトルIDかチェック（ローカル状態での重複防止）
         if (window.processedBattleIds && window.processedBattleIds.includes(battleId)) {
             console.log("🥊 [Battle] Battle already processed:", battleId);
             return;
         }
-        
         console.log("🥊 [Battle] Starting battle result processing for battleId:", battleId);
         setIsBattleProcessing(true);
-        
         // 処理済みバトルIDを記録
         if (!window.processedBattleIds) {
             window.processedBattleIds = [];
         }
         window.processedBattleIds.push(battleId);
-        
         // 古いバトルIDを削除（メモリリーク防止）
         if (window.processedBattleIds.length > 20) {
             window.processedBattleIds = window.processedBattleIds.slice(-10);
         }
-        
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
             
@@ -943,32 +938,28 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             if (winner) {
                 const winnerName = getUserNameById(winner);
                 const loserName = getUserNameById(loser);
-                
                 // 当事者にバトル結果ポップアップを表示
-                if (winner === userId || loser === userId) {
+                if (winner === localUserId || loser === localUserId) {
                     setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
-                    
                     // 勝利時は豪華な勝利画面を表示
-                    if (winner === userId) {
+                    if (winner === localUserId) {
                         setVictoryScreenData({
                             opponentName: loserName,
-                            myBet: player1 === userId ? player1Bet : player2Bet,
-                            opponentBet: player1 === userId ? player2Bet : player1Bet,
+                            myBet: player1 === localUserId ? player1Bet : player2Bet,
+                            opponentBet: player1 === localUserId ? player2Bet : player1Bet,
                             pointsGained: 5
                         });
-                        
                         // 勝利画面を少し遅らせて表示（演出効果）
                         setTimeout(() => {
                             setShowBattleVictoryScreen(true);
                         }, 500);
-                        
-                        console.log("🎉 [Victory] Battle victory screen will be displayed for user:", userId.substring(0, 8));
+                        console.log("🎉 [Victory] Battle victory screen will be displayed for user:", localUserId.substring(0, 8));
                     } else {
                         // 敗北時は通常のポップアップ
                         setBattleResultData({
                             isWinner: false,
-                            myBet: player1 === userId ? player1Bet : player2Bet,
-                            opponentBet: player1 === userId ? player2Bet : player1Bet,
+                            myBet: player1 === localUserId ? player1Bet : player2Bet,
+                            opponentBet: player1 === localUserId ? player2Bet : player1Bet,
                             opponentName: winnerName,
                             isDraw: false
                         });
@@ -2420,10 +2411,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                         walls: (() => {
                                                             const playerState = gameData.playerStates?.[viewingMazeOwnerId];
                                                             const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
-                                                            
                                                             // 自分が作った迷路をプレイしている人かどうかをチェック
                                                             const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
-                                                            
                                                             if (isPlayingMyMaze) {
                                                                 // 自分が作った迷路をプレイしている人：全ての壁を表示
                                                                 const targetMaze = gameData.mazes[assignedMazeOwnerId];
@@ -2446,38 +2435,34 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                             const playerState = gameData.playerStates?.[viewingMazeOwnerId];
                                                             const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
                                                             const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
-                                                            
                                                             return (isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId) 
                                                                 ? (gameData.playerStates?.[viewingMazeOwnerId]?.position || null)
                                                                 : null;
                                                         }
                                                     })()} // 4人対戦時は相手の位置情報を完全に非表示（自分が作った迷路でも）
-                                                    otherPlayers={[]} // 右側の迷路では他プレイヤーの現在地を表示しない
+                                                    otherPlayers={[]}
                                                     showAllWalls={(() => {
                                                         const playerState = gameData.playerStates?.[viewingMazeOwnerId];
                                                         const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
-                                                        return assignedMazeOwnerId === effectiveUserId; // 自分が作った迷路をプレイしている人のみ壁表示
+                                                        return assignedMazeOwnerId === effectiveUserId;
                                                     })()}
                                                     onCellClick={() => {}}
                                                     gridSize={currentGridSize}
                                                     sharedWalls={[]}
                                                     highlightPlayer={(() => {
-                                                        // 四人対戦モードでは、プレイヤーのハイライトを完全に非表示
                                                         if (gameData?.mode === '4player') {
-                                                            // 自分自身の場合のみハイライト
                                                             return viewingMazeOwnerId === effectiveUserId;
                                                         } else {
-                                                            // 二人対戦モードでは従来通り
                                                             const playerState = gameData.playerStates?.[viewingMazeOwnerId];
                                                             const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
                                                             const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
-                                                            
                                                             return isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId;
                                                         }
                                                     })()}
                                                     smallView={false}
-                                                    revealedCells={gameData.playerStates?.[viewingMazeOwnerId]?.revealedCells || {}}
-                                                    hitWalls={gameData.playerStates?.[viewingMazeOwnerId]?.hitWalls || []}
+                                                    // 他プレイヤーの迷路では移動跡・壁ヒットを非表示
+                                                    revealedCells={viewingMazeOwnerId === effectiveUserId ? (gameData.playerStates?.[viewingMazeOwnerId]?.revealedCells || {}) : {}}
+                                                    hitWalls={viewingMazeOwnerId === effectiveUserId ? (gameData.playerStates?.[viewingMazeOwnerId]?.hitWalls || []) : []}
                                                 />
                                             </div>
                                         </div>
