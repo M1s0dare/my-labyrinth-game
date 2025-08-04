@@ -765,24 +765,81 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
             
-            // まずバトル状態を処理中に変更（重複実行防止）
-            await updateDoc(gameDocRef, {
-                'activeBattle.processing': true
+            // トランザクションを使用して重複実行を防止
+            await runTransaction(db, async (transaction) => {
+                const gameDoc = await transaction.get(gameDocRef);
+                if (!gameDoc.exists()) {
+                    throw new Error("Game document does not exist");
+                }
+                
+                const currentData = gameDoc.data();
+                const currentBattle = currentData.activeBattle;
+                
+                // 再度チェック：既に処理済みかまたは異なるバトルか確認
+                if (!currentBattle || 
+                    currentBattle.battleId !== battleId || 
+                    currentBattle.status === 'completed' || 
+                    currentBattle.processing) {
+                    console.log("🥊 [Battle] Battle already processed or changed, skipping");
+                    return;
+                }
+                
+                // 処理中フラグを設定
+                transaction.update(gameDocRef, {
+                    'activeBattle.processing': true
+                });
+                
+                const [player1, player2] = battle.participants;
+                const player1State = currentData.playerStates[player1];
+                const player2State = currentData.playerStates[player2];
+                
+                const player1Bet = player1State?.battleBet || 0;
+                const player2Bet = player2State?.battleBet || 0;
+                
+                console.log("🥊 [Battle] Processing battle result:", {
+                    player1: player1.substring(0, 8),
+                    player2: player2.substring(0, 8),
+                    player1Bet,
+                    player2Bet
+                });
+                
+                let winner = null;
+                let loser = null;
+                
+                if (player1Bet > player2Bet) {
+                    winner = player1;
+                    loser = player2;
+                } else if (player2Bet > player1Bet) {
+                    winner = player2;
+                    loser = player1;
+                } // 同じ場合は引き分け
+                
+                const updates = {
+                    // バトル状態をクリア
+                    [`playerStates.${player1}.inBattleWith`]: null,
+                    [`playerStates.${player2}.inBattleWith`]: null,
+                    [`playerStates.${player1}.battleBet`]: null,
+                    [`playerStates.${player2}.battleBet`]: null,
+                    activeBattle: null
+                };
+                
+                if (winner) {
+                    // 勝者に5ポイント付与
+                    updates[`playerStates.${winner}.score`] = increment(5);
+                    // 敗者に1ターン行動不能状態を付与
+                    updates[`playerStates.${loser}.skipNextTurn`] = true;
+                }
+                
+                // トランザクション内でアップデート
+                transaction.update(gameDocRef, updates);
             });
             
+            // トランザクション完了後のUI更新
             const [player1, player2] = battle.participants;
             const player1State = gameData.playerStates[player1];
             const player2State = gameData.playerStates[player2];
-            
             const player1Bet = player1State?.battleBet || 0;
             const player2Bet = player2State?.battleBet || 0;
-            
-            console.log("🥊 [Battle] Processing battle result:", {
-                player1: player1.substring(0, 8),
-                player2: player2.substring(0, 8),
-                player1Bet,
-                player2Bet
-            });
             
             let winner = null;
             let loser = null;
@@ -793,23 +850,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             } else if (player2Bet > player1Bet) {
                 winner = player2;
                 loser = player1;
-            } // 同じ場合は引き分け
-            
-            const updates = {
-                // バトル状態をクリア
-                [`playerStates.${player1}.inBattleWith`]: null,
-                [`playerStates.${player2}.inBattleWith`]: null,
-                [`playerStates.${player1}.battleBet`]: null,
-                [`playerStates.${player2}.battleBet`]: null,
-                activeBattle: null
-            };
+            }
             
             if (winner) {
-                // 勝者に5ポイント付与
-                updates[`playerStates.${winner}.score`] = increment(5);
-                // 敗者に1ターン行動不能状態を付与
-                updates[`playerStates.${loser}.skipNextTurn`] = true;
-                
                 const winnerName = getUserNameById(winner);
                 const loserName = getUserNameById(loser);
                 
@@ -859,8 +902,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 await sendSystemChatMessage(`🤝 バトル結果: 引き分け`);
                 setMessage(`🤝 バトル引き分け`);
             }
-            
-            await updateDoc(gameDocRef, updates);
             
             // バトル関連状態をリセット
             setIsBattleModalOpen(false);
@@ -1779,8 +1820,17 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 );
                 
                 if (allParticipantsBetted) {
-                    console.log("🥊 [Battle] All participants have placed bets, processing result");
-                    processBattleResult(battle);
+                    // 処理権限の判定：参加者のうち、より小さいuserIdを持つクライアントのみが処理を実行
+                    const sortedParticipants = [...battle.participants].sort();
+                    const currentUserId = debugMode ? effectiveUserId : userId;
+                    const shouldProcess = sortedParticipants[0] === currentUserId;
+                    
+                    if (shouldProcess) {
+                        console.log("🥊 [Battle] All participants have placed bets, processing result (authorized client)");
+                        processBattleResult(battle);
+                    } else {
+                        console.log("🥊 [Battle] All participants have placed bets, but this client is not authorized to process");
+                    }
                 }
             }
         } else if (!gameData?.activeBattle) {
