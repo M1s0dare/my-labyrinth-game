@@ -47,3 +47,40 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* バトル勝利画面用のカスタムアニメーション */
+@keyframes victory-shine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes victory-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 0 30px rgba(255, 165, 0, 0.6); }
+}
+
+@keyframes victory-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.victory-shine {
+  animation: victory-shine 2s infinite;
+}
+
+.victory-glow {
+  animation: victory-glow 2s ease-in-out infinite;
+}
+
+.victory-float {
+  animation: victory-float 3s ease-in-out infinite;
+}
+
+.sparkle {
+  animation: sparkle 1.5s ease-in-out infinite;
+}

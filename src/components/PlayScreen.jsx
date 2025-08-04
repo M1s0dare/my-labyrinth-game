@@ -63,6 +63,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [showBattleResultPopup, setShowBattleResultPopup] = useState(false);
     const [battleResultData, setBattleResultData] = useState(null);
     
+    // バトル勝利画面（豪華版）
+    const [showBattleVictoryScreen, setShowBattleVictoryScreen] = useState(false);
+    const [victoryScreenData, setVictoryScreenData] = useState(null);
+    
     // バトル待機ポップアップ（当事者用 - 相手の入力待ち）
     const [showBattleWaitingPopup, setShowBattleWaitingPopup] = useState(false);
     
@@ -943,18 +947,33 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 // 当事者にバトル結果ポップアップを表示
                 if (winner === userId || loser === userId) {
                     setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
-                    setBattleResultData({
-                        isWinner: winner === userId,
-                        myBet: winner === userId ? 
-                            (player1 === userId ? player1Bet : player2Bet) : 
-                            (player1 === userId ? player1Bet : player2Bet),
-                        opponentBet: winner === userId ? 
-                            (player1 === userId ? player2Bet : player1Bet) : 
-                            (player1 === userId ? player2Bet : player1Bet),
-                        opponentName: winner === userId ? loserName : winnerName,
-                        isDraw: false
-                    });
-                    setShowBattleResultPopup(true);
+                    
+                    // 勝利時は豪華な勝利画面を表示
+                    if (winner === userId) {
+                        setVictoryScreenData({
+                            opponentName: loserName,
+                            myBet: player1 === userId ? player1Bet : player2Bet,
+                            opponentBet: player1 === userId ? player2Bet : player1Bet,
+                            pointsGained: 5
+                        });
+                        
+                        // 勝利画面を少し遅らせて表示（演出効果）
+                        setTimeout(() => {
+                            setShowBattleVictoryScreen(true);
+                        }, 500);
+                        
+                        console.log("🎉 [Victory] Battle victory screen will be displayed for user:", userId.substring(0, 8));
+                    } else {
+                        // 敗北時は通常のポップアップ
+                        setBattleResultData({
+                            isWinner: false,
+                            myBet: player1 === userId ? player1Bet : player2Bet,
+                            opponentBet: player1 === userId ? player2Bet : player1Bet,
+                            opponentName: winnerName,
+                            isDraw: false
+                        });
+                        setShowBattleResultPopup(true);
+                    }
                 }
                 
                 // 全員にバトル結果を通知（ポイント数は非表示）
@@ -1136,6 +1155,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setShowBattleResultPopup(false);
         setBattleResultData(null);
         setShowBattleWaitingPopup(false);
+        setShowBattleVictoryScreen(false);
+        setVictoryScreenData(null);
         
         // ゴール通知関連のリセット
         setShowGoalNotificationPopup(false);
@@ -1971,6 +1992,20 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             }
         }
     }, [gameData?.status, gameData?.interruptedBy, gameData?.interruptedPlayerName, userId, debugMode, effectiveUserId]);
+    
+    // バトル勝利画面の自動閉じ機能
+    useEffect(() => {
+        if (showBattleVictoryScreen) {
+            const timer = setTimeout(() => {
+                setShowBattleVictoryScreen(false);
+                setVictoryScreenData(null);
+                console.log("🎉 [Victory] Victory screen auto-closed after 10 seconds");
+            }, 10000); // 10秒後に自動閉じ
+            
+            return () => clearTimeout(timer);
+        }
+    }, [showBattleVictoryScreen]);
+    
     // handleSendChatMessage関数の実装
     const handleSendChatMessage = async () => {
         if (!chatInput.trim() || !gameId) return;
@@ -2851,6 +2886,102 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         >
                             確認
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* バトル勝利画面（豪華版） */}
+            {showBattleVictoryScreen && victoryScreenData && (
+                <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center z-50 p-4">
+                    {/* 背景アニメーション - 輝く星々 */}
+                    <div className="absolute inset-0 overflow-hidden">
+                        <div className="absolute top-10 left-10 w-4 h-4 bg-yellow-400 rounded-full sparkle"></div>
+                        <div className="absolute top-32 right-20 w-3 h-3 bg-yellow-300 rounded-full sparkle" style={{animationDelay: '0.2s'}}></div>
+                        <div className="absolute bottom-20 left-1/4 w-2 h-2 bg-yellow-500 rounded-full sparkle" style={{animationDelay: '0.4s'}}></div>
+                        <div className="absolute bottom-32 right-1/3 w-3 h-3 bg-yellow-400 rounded-full sparkle" style={{animationDelay: '0.6s'}}></div>
+                        <div className="absolute top-1/2 left-12 w-2 h-2 bg-yellow-300 rounded-full sparkle" style={{animationDelay: '0.8s'}}></div>
+                        <div className="absolute top-20 right-1/2 w-4 h-4 bg-yellow-500 rounded-full sparkle" style={{animationDelay: '1s'}}></div>
+                        <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-orange-400 rounded-full sparkle" style={{animationDelay: '1.2s'}}></div>
+                        <div className="absolute bottom-1/4 right-1/4 w-2 h-2 bg-orange-300 rounded-full sparkle" style={{animationDelay: '1.4s'}}></div>
+                    </div>
+                    
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg text-center relative overflow-hidden victory-glow">
+                        {/* 上部の装飾光線 */}
+                        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 victory-shine"></div>
+                        
+                        {/* メインタイトル */}
+                        <div className="mb-6 victory-float">
+                            <div className="text-6xl mb-2 animate-bounce">🏆</div>
+                            <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 mb-2">
+                                VICTORY!
+                            </h1>
+                            <div className="text-2xl font-bold text-gray-800 mb-1">バトル勝利！</div>
+                            <div className="text-lg text-gray-600">
+                                {victoryScreenData.opponentName}を撃破！
+                            </div>
+                        </div>
+                        
+                        {/* 勝敗詳細 */}
+                        <div className="mb-6 p-6 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border-2 border-yellow-200 shadow-inner">
+                            <div className="text-lg font-semibold text-gray-800 mb-4 flex items-center justify-center">
+                                <Swords className="mr-2" size={20} />
+                                バトル結果
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div className="text-center p-3 bg-green-100 rounded-lg border-2 border-green-300 transform hover:scale-105 transition-transform">
+                                    <div className="text-sm text-green-700 font-medium">あなた</div>
+                                    <div className="text-2xl font-bold text-green-800">{victoryScreenData.myBet}pt</div>
+                                    <div className="text-xs text-green-600 font-semibold">🏆 勝者</div>
+                                </div>
+                                <div className="text-center p-3 bg-red-100 rounded-lg border-2 border-red-300 opacity-75">
+                                    <div className="text-sm text-red-700 font-medium">{victoryScreenData.opponentName}</div>
+                                    <div className="text-2xl font-bold text-red-800">{victoryScreenData.opponentBet}pt</div>
+                                    <div className="text-xs text-red-600">💀 敗者</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* 獲得ポイント */}
+                        <div className="mb-6 p-4 bg-gradient-to-r from-green-100 to-emerald-100 rounded-xl border-2 border-green-300 shadow-lg">
+                            <div className="text-lg font-semibold text-green-800 mb-2 flex items-center justify-center">
+                                🎁 勝利ボーナス
+                            </div>
+                            <div className="text-3xl font-bold text-green-600 animate-pulse">+{victoryScreenData.pointsGained}pt</div>
+                            <div className="text-sm text-green-700 mt-1">スコアに加算されました！</div>
+                        </div>
+                        
+                        {/* 特殊効果メッセージ */}
+                        <div className="mb-6 p-3 bg-orange-100 rounded-lg border border-orange-300 shadow-inner">
+                            <div className="text-sm text-orange-800 flex items-center justify-center">
+                                <AlertTriangle className="mr-2" size={16} />
+                                💀 {victoryScreenData.opponentName}は次のターン行動不能になります
+                            </div>
+                        </div>
+                        
+                        {/* 閉じるボタン */}
+                        <button 
+                            onClick={() => {
+                                setShowBattleVictoryScreen(false);
+                                setVictoryScreenData(null);
+                            }}
+                            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-4 px-6 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                        >
+                            🎉 続行する
+                        </button>
+                        
+                        {/* 自動閉じタイマー表示 */}
+                        <div className="mt-3 text-xs text-gray-500">
+                            10秒後に自動的に閉じます
+                        </div>
+                        
+                        {/* 下部の装飾光線 */}
+                        <div className="absolute bottom-0 left-0 right-0 h-2 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-400"></div>
+                        
+                        {/* 光の効果 */}
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full">
+                            <div className="absolute top-4 right-4 w-8 h-8 bg-yellow-300 rounded-full opacity-30 animate-ping"></div>
+                            <div className="absolute bottom-4 left-4 w-6 h-6 bg-orange-300 rounded-full opacity-30 animate-ping" style={{animationDelay: '0.5s'}}></div>
+                        </div>
                     </div>
                 </div>
             )}
