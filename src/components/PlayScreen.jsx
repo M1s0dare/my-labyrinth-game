@@ -1924,19 +1924,20 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             }
             
             // 全当事者が賭けを完了した場合、結果を処理
-            if (battle.status === 'betting' && !battle.processing) {
+            if (battle.status === 'betting' && !battle.processing && !isBattleProcessing) {
                 const allParticipantsBetted = battle.participants?.every(pid => 
                     gameData.playerStates[pid]?.battleBet !== undefined && 
                     gameData.playerStates[pid]?.battleBet !== null
                 );
-                
+
                 if (allParticipantsBetted) {
                     // 処理権限の判定：参加者のうち、より小さいuserIdを持つクライアントのみが処理を実行
                     const sortedParticipants = [...battle.participants].sort();
                     const currentUserId = debugMode ? effectiveUserId : userId;
                     const shouldProcess = sortedParticipants[0] === currentUserId;
-                    
+
                     if (shouldProcess) {
+                        setIsBattleProcessing(true); // ここでローカルフラグを即時立てる
                         console.log("🥊 [Battle] All participants have placed bets, processing result (authorized client)");
                         processBattleResult(battle);
                     } else {
