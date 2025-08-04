@@ -2307,7 +2307,17 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                             }
                                                         })()
                                                     }}
-                                                    playerPosition={gameData.playerStates?.[viewingMazeOwnerId]?.position || null}
+                                                    playerPosition={(() => {
+                                                        // 自分が作った迷路をプレイしている人の場合のみ位置を表示
+                                                        const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                        const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                        const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
+                                                        
+                                                        // 自分が作った迷路をプレイしている人、または自分自身の場合のみ位置表示
+                                                        return (isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId) 
+                                                            ? (gameData.playerStates?.[viewingMazeOwnerId]?.position || null)
+                                                            : null;
+                                                    })()} // 4人対戦時は基本的に他プレイヤーの位置を非表示
                                                     otherPlayers={[]} // 右側の迷路では他プレイヤーの現在地を表示しない
                                                     showAllWalls={(() => {
                                                         const playerState = gameData.playerStates?.[viewingMazeOwnerId];
@@ -2317,7 +2327,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                     onCellClick={() => {}}
                                                     gridSize={currentGridSize}
                                                     sharedWalls={[]}
-                                                    highlightPlayer={true}
+                                                    highlightPlayer={(() => {
+                                                        // 自分が作った迷路をプレイしている人の場合のみハイライト
+                                                        const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                        const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                        const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
+                                                        
+                                                        return isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId;
+                                                    })()}
                                                     smallView={false}
                                                     revealedCells={gameData.playerStates?.[viewingMazeOwnerId]?.revealedCells || {}}
                                                     hitWalls={gameData.playerStates?.[viewingMazeOwnerId]?.hitWalls || []}

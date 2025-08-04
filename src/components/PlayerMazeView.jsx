@@ -113,11 +113,11 @@ const PlayerMazeView = ({
                     <div className="border rounded-lg p-2 bg-gray-50">
                         <MazeGrid
                             mazeData={gameData.mazes[selectedViewPlayerId]}
-                            playerPosition={gameData.playerStates?.[selectedViewPlayerId]?.position}
+                            playerPosition={gameData?.mode === '4player' ? null : gameData.playerStates?.[selectedViewPlayerId]?.position} // 4人対戦時は他プレイヤーの位置を非表示
                             showAllWalls={debugMode ? showOpponentWallsDebug : false}
                             onCellClick={() => {}} // 他プレイヤーの迷路はクリック無効
                             gridSize={currentGridSize}
-                            highlightPlayer={true}
+                            highlightPlayer={gameData?.mode !== '4player'} // 4人対戦時はプレイヤーハイライト無効
                             smallView={false}
                             playerRevealedCells={gameData.playerStates?.[selectedViewPlayerId]?.revealedCells || {}}
                             isOtherPlayerView={true}
@@ -129,12 +129,21 @@ const PlayerMazeView = ({
                     
                     {/* プレイヤー詳細情報 */}
                     <div className="p-2 bg-gray-50 rounded text-xs space-y-1">
-                        <div>現在位置: ({gameData.playerStates?.[selectedViewPlayerId]?.position?.r || 0}, {gameData.playerStates?.[selectedViewPlayerId]?.position?.c || 0})</div>
+                        {/* 4人対戦時は他プレイヤーの位置を非表示 */}
+                        {gameData?.mode !== '4player' && (
+                            <div>現在位置: ({gameData.playerStates?.[selectedViewPlayerId]?.position?.r || 0}, {gameData.playerStates?.[selectedViewPlayerId]?.position?.c || 0})</div>
+                        )}
                         
                         {debugMode && (
                             <>
                                 <div>探索済みセル: {Object.keys(gameData.playerStates?.[selectedViewPlayerId]?.revealedCells || {}).length}個</div>
                                 <div>最終移動: {gameData.playerStates?.[selectedViewPlayerId]?.lastMoveTime ? '最近' : '未移動'}</div>
+                                {/* デバッグモード時のみ4人対戦でも位置表示 */}
+                                {gameData?.mode === '4player' && (
+                                    <div className="text-orange-600">
+                                        [DEBUG] 位置: ({gameData.playerStates?.[selectedViewPlayerId]?.position?.r || 0}, {gameData.playerStates?.[selectedViewPlayerId]?.position?.c || 0})
+                                    </div>
+                                )}
                                 {gameData.playerStates?.[selectedViewPlayerId]?.sabotageEffects?.length > 0 && (
                                     <div className="text-red-600">
                                         妨害効果: {gameData.playerStates[selectedViewPlayerId].sabotageEffects.length}個
