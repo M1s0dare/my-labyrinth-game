@@ -443,7 +443,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             if (gameData?.mode === '4player' && isFirstVisit) {
                 updates[`playerStates.${operatingUserId}.score`] = increment(1);
                 updates[`playerStates.${operatingUserId}.revealedCells.${cellKey}`] = true;
-                moveMessage = `(${newR},${newC})に移動！ +1pt (初回訪問)`;
+                moveMessage = `(${newC +1},${newR +1})に移動！ +1pt (初回訪問)`;
                 setMessage(moveMessage);
                 console.log("🎯 [Points] First visit bonus awarded:", {
                     playerId: operatingUserId.substring(0, 8),
@@ -452,7 +452,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     previouslyVisited: Object.keys(revealedCells).length
                 });
             } else {
-                moveMessage = `(${newR},${newC})に移動しました。`;
+                moveMessage = `(${newC +1},${newR +1})に移動しました。`;
                 if (gameData?.mode === '4player' && !isFirstVisit) {
                     moveMessage += " (訪問済み)";
                 }
@@ -1538,7 +1538,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             if (gameData?.mode === '4player' && isFirstVisit) {
                 updates[`playerStates.${userId}.score`] = increment(1);
                 updates[`playerStates.${userId}.revealedCells.${cellKey}`] = true;
-                setMessage(`(${newR},${newC})に移動！ +1pt (初回訪問)`);
+                setMessage(`(${newC +1},${newR +1})に移動！ +1pt (初回訪問)`);
                 console.log("🎯 [Points] First visit bonus awarded:", {
                     playerId: userId.substring(0, 8),
                     position: { r: newR, c: newC },
@@ -1546,7 +1546,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     previouslyVisited: Object.keys(revealedCells).length
                 });
             } else {
-                let moveMsg = `(${newR},${newC})に移動しました。`;
+                let moveMsg = `(${newC +1},${newR +1})に移動しました。`;
                 if (gameData?.mode === '4player' && !isFirstVisit) {
                     moveMsg += " (訪問済み)";
                 }
