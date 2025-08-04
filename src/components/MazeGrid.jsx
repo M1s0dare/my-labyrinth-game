@@ -196,6 +196,69 @@ const MazeGrid = ({
     };
 
     /**
+     * 壁の視覚的表示用の棒を描画する関数
+     * @param {number} r - 行インデックス
+     * @param {number} c - 列インデックス
+     * @returns {JSX.Element} 壁の棒の描画要素
+     */
+    const renderWallBars = (r, c) => {
+        const wallBars = [];
+        const barThickness = smallView ? '2px' : '4px';
+        const barColor = 'bg-black';
+        const hitBarColor = 'bg-red-500';
+        
+        // 上の壁をチェック
+        if (r > 0 && hasWallBetween(r, c, r-1, c)) {
+            const isHit = isHitWallBetween(r, c, r-1, c);
+            wallBars.push(
+                <div
+                    key={`wall-top-${r}-${c}`}
+                    className={`absolute top-0 left-0 w-full ${isHit ? hitBarColor : barColor} z-20 pointer-events-none`}
+                    style={{ height: barThickness, transform: 'translateY(-50%)' }}
+                />
+            );
+        }
+        
+        // 下の壁をチェック
+        if (r < gridSize - 1 && hasWallBetween(r, c, r+1, c)) {
+            const isHit = isHitWallBetween(r, c, r+1, c);
+            wallBars.push(
+                <div
+                    key={`wall-bottom-${r}-${c}`}
+                    className={`absolute bottom-0 left-0 w-full ${isHit ? hitBarColor : barColor} z-20 pointer-events-none`}
+                    style={{ height: barThickness, transform: 'translateY(50%)' }}
+                />
+            );
+        }
+        
+        // 左の壁をチェック
+        if (c > 0 && hasWallBetween(r, c, r, c-1)) {
+            const isHit = isHitWallBetween(r, c, r, c-1);
+            wallBars.push(
+                <div
+                    key={`wall-left-${r}-${c}`}
+                    className={`absolute top-0 left-0 h-full ${isHit ? hitBarColor : barColor} z-20 pointer-events-none`}
+                    style={{ width: barThickness, transform: 'translateX(-50%)' }}
+                />
+            );
+        }
+        
+        // 右の壁をチェック
+        if (c < gridSize - 1 && hasWallBetween(r, c, r, c+1)) {
+            const isHit = isHitWallBetween(r, c, r, c+1);
+            wallBars.push(
+                <div
+                    key={`wall-right-${r}-${c}`}
+                    className={`absolute top-0 right-0 h-full ${isHit ? hitBarColor : barColor} z-20 pointer-events-none`}
+                    style={{ width: barThickness, transform: 'translateX(50%)' }}
+                />
+            );
+        }
+        
+        return wallBars;
+    };
+
+    /**
      * 2つのセル間の壁がhitWallsに含まれているかどうかを判定する関数
      * @param {number} r1 - セル1の行
      * @param {number} c1 - セル1の列
@@ -344,6 +407,9 @@ const MazeGrid = ({
                         >
                             {/* セルの内容を表示 */}
                             {renderCellContent(r,c)}
+                            
+                            {/* 壁の視覚的表示用の棒を描画 */}
+                            {!isCreating && renderWallBars(r, c)}
                             
                             {/* 作成モードでの壁編集用UIを表示 */}
                             {isCreating && onWallClick && !smallView && (
