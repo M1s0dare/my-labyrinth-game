@@ -154,6 +154,7 @@ export const useGameLogic = (gameId, gameData, gameType, userId, mazeToPlayData,
                 updates[`playerStates.${actualUserId}.inBattleWith`] = battleOpponent;
                 updates[`playerStates.${battleOpponent}.inBattleWith`] = actualUserId;
                 updates.activeBattle = {
+                    battleId: `battle_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                     player1: actualUserId,
                     player2: battleOpponent,
                     startTime: serverTimestamp(),
