@@ -1968,159 +1968,94 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     }, [gameType, gameData, gameId]);
 
-    // バトル状態監視
+    // バトル状態監視（詳細仕様対応）
     useEffect(() => {
         if (gameData?.activeBattle && gameData?.mode === '4player') {
             const battle = gameData.activeBattle;
-            // デバッグモードでは切り替えられたプレイヤーのIDで判定
             const currentUserId = debugMode ? effectiveUserId : userId;
             const isParticipant = battle.participants?.includes(currentUserId);
             
             console.log("🥊 [Battle] Battle state monitoring:", {
                 battleExists: !!battle,
                 battleStatus: battle.status,
-                participants: battle.participants,
+                participants: battle.participants?.map(p => p.substring(0, 8)),
                 currentUser: currentUserId.substring(0, 8),
-                actualUser: userId.substring(0, 8),
                 isParticipant,
-                modalOpen: isBattleModalOpen,
-                waitDialogOpen: showBattleWaitDialog,
-                queueLength: gameData.battleQueue?.length || 0,
                 debugMode
             });
             
-            // 当事者の場合：バトルモーダルを表示、待機ダイアログを非表示
-            if (isParticipant && !isBattleModalOpen && battle.status === 'betting') {
-                // 自分がまだポイント選択していない場合：バトルモーダルを表示
+            if (isParticipant) {
+                // 当事者の場合の処理
                 const myBetStatus = gameData.playerStates[currentUserId]?.battleBet;
                 const hasMyBet = myBetStatus !== undefined && myBetStatus !== null && myBetStatus >= 0;
                 
-                console.log("🥊 [Battle] Checking participant bet status:", {
-                    currentUserId: currentUserId.substring(0, 8),
-                    myBetStatus,
-                    hasMyBet,
-                    isBattleModalOpen,
-                    battleStatus: battle.status
-                });
-                
-                if (!hasMyBet) {
-                    console.log("🥊 [Battle] Opening battle modal for participant");
+                // 1. まだポイント選択していない → バトルモーダル表示
+                if (!hasMyBet && battle.status === 'betting') {
+                    console.log("🥊 [Battle] Participant needs to bet - showing battle modal");
                     setIsBattleModalOpen(true);
-                    setShowBattleWaitDialog(false); // 念のため待機ダイアログを閉じる
-                    setShowBattleWaitingPopup(false); // 待機ポップアップも閉じる
-                } else {
-                    // 自分はポイント選択済みだが、相手がまだの場合：待機ポップアップを表示
+                    setShowBattleWaitDialog(false);
+                    setShowBattleWaitingPopup(false);
+                } 
+                // 2. 自分は選択済み、相手がまだ → 当事者用待機画面
+                else if (hasMyBet && battle.status === 'betting') {
                     const allParticipantsBetted = battle.participants?.every(pid => {
                         const playerBet = gameData.playerStates[pid]?.battleBet;
                         return playerBet !== undefined && playerBet !== null && playerBet >= 0;
                     });
                     
-                    console.log("🥊 [Battle] Checking if all participants have bet:", {
-                        allParticipantsBetted,
-                        participants: battle.participants.map(pid => ({
-                            id: pid.substring(0, 8),
-                            bet: gameData.playerStates[pid]?.battleBet
-                        }))
-                    });
-                    
-                    if (!allParticipantsBetted && !showBattleWaitingPopup) {
-                        console.log("🥊 [Battle] Showing waiting popup for participant who already bet");
-                        setShowBattleWaitingPopup(true);
+                    if (!allParticipantsBetted) {
+                        console.log("🥊 [Battle] Participant waiting for opponent bet - showing waiting popup");
                         setIsBattleModalOpen(false);
                         setShowBattleWaitDialog(false);
+                        setShowBattleWaitingPopup(true);
                     }
                 }
-            }
-            
-            // 非当事者の場合：バトルモーダルを閉じ、待機ダイアログを表示
-            if (!isParticipant) {
-                if (isBattleModalOpen) {
-                    console.log("🥊 [Battle] Closing battle modal for non-participant");
+            } else {
+                // 非当事者の場合：待機画面を表示
+                if (battle.status === 'betting') {
+                    console.log("🥊 [Battle] Non-participant - showing wait dialog");
                     setIsBattleModalOpen(false);
-                }
-                
-                if (!showBattleWaitDialog && battle.status === 'betting') {
-                    console.log("🥊 [Battle] Showing battle wait dialog for non-participant");
+                    setShowBattleWaitingPopup(false);
                     setShowBattleWaitDialog(true);
                     setBattleParticipants(battle.participants || []);
                 }
             }
             
-            // 全当事者が賭けを完了した場合、結果を処理
+            // バトル結果処理の確認
             if (battle.status === 'betting' && !battle.processing && !isBattleProcessing) {
                 const allParticipantsBetted = battle.participants?.every(pid => {
                     const playerBet = gameData.playerStates[pid]?.battleBet;
                     return playerBet !== undefined && playerBet !== null && playerBet >= 0;
                 });
 
-                console.log("🥊 [Battle] Checking battle processing conditions:", {
-                    battleStatus: battle.status,
-                    battleProcessing: battle.processing,
-                    isBattleProcessing,
-                    allParticipantsBetted,
-                    participants: battle.participants.map(pid => ({
-                        id: pid.substring(0, 8),
-                        bet: gameData.playerStates[pid]?.battleBet,
-                        betStatus: {
-                            defined: gameData.playerStates[pid]?.battleBet !== undefined,
-                            notNull: gameData.playerStates[pid]?.battleBet !== null,
-                            nonNegative: gameData.playerStates[pid]?.battleBet >= 0
-                        }
-                    }))
-                });
-
                 if (allParticipantsBetted) {
-                    // 処理権限の判定：参加者のうち、より小さいuserIdを持つクライアントのみが処理を実行
+                    // 処理権限：参加者のうち最小userIdを持つクライアントが処理
                     const sortedParticipants = [...battle.participants].sort();
-                    const currentUserId = debugMode ? effectiveUserId : userId;
                     const shouldProcess = sortedParticipants[0] === currentUserId;
 
-                    console.log("🥊 [Battle] Processing authorization check:", {
-                        sortedParticipants: sortedParticipants.map(p => p.substring(0, 8)),
-                        currentUserId: currentUserId.substring(0, 8),
+                    console.log("🥊 [Battle] All bets complete - processing authorization:", {
                         authorizedProcessor: sortedParticipants[0].substring(0, 8),
+                        currentUser: currentUserId.substring(0, 8),
                         shouldProcess
                     });
 
                     if (shouldProcess) {
-                        setIsBattleProcessing(true); // ここでローカルフラグを即時立てる
-                        console.log("🥊 [Battle] All participants have placed bets, processing result (authorized client)");
+                        setIsBattleProcessing(true);
                         processBattleResult(battle);
-                    } else {
-                        console.log("🥊 [Battle] All participants have placed bets, but this client is not authorized to process");
                     }
-                } else {
-                    console.log("🥊 [Battle] Not all participants have bet yet, waiting...");
                 }
             }
         } else if (!gameData?.activeBattle) {
-            // バトルが終了した場合は全てのダイアログを閉じる
-            if (isBattleModalOpen) {
-                console.log("🥊 [Battle] Closing battle modal - no active battle");
+            // バトル終了時：全てのバトル関連UIを閉じる
+            if (isBattleModalOpen || showBattleWaitDialog || showBattleWaitingPopup) {
+                console.log("🥊 [Battle] No active battle - closing all battle UI");
                 setIsBattleModalOpen(false);
-            }
-            if (showBattleWaitDialog) {
-                console.log("🥊 [Battle] Closing battle wait dialog - no active battle");
                 setShowBattleWaitDialog(false);
+                setShowBattleWaitingPopup(false);
                 setBattleParticipants([]);
             }
-            if (showBattleWaitingPopup) {
-                console.log("🥊 [Battle] Closing battle waiting popup - no active battle");
-                setShowBattleWaitingPopup(false);
-            }
-            
-            // バトルキューをチェックして、待機中のバトルがあれば処理状況をログに出力
-            if (gameData?.battleQueue && gameData.battleQueue.length > 0) {
-                console.log("🥊 [BattleQueue] Battles waiting in queue:", {
-                    queueLength: gameData.battleQueue.length,
-                    waitingBattles: gameData.battleQueue.map(b => ({
-                        battleId: b.battleId,
-                        participants: b.participants.map(p => p.substring(0, 8))
-                    }))
-                });
-            }
         }
-    }, [gameData?.activeBattle, gameData?.battleQueue, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen, showBattleWaitDialog, showBattleWaitingPopup, debugMode, effectiveUserId]);
+    }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, debugMode, effectiveUserId, isBattleModalOpen, showBattleWaitDialog, showBattleWaitingPopup, isBattleProcessing]);
 
     // ゲーム中断状態監視
     useEffect(() => {

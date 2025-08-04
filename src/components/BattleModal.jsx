@@ -17,19 +17,19 @@ import { Swords, MinusCircle, PlusCircle } from 'lucide-react';
  * @param {number} myCurrentScore - 現在のスコア
  */
 const BattleModal = ({ isOpen, onClose, onBet, maxBet, opponentName, myName, myCurrentScore }) => {
-    const [betAmount, setBetAmount] = useState(0);  // 賭け金の状態管理
+    const [betAmount, setBetAmount] = useState(0);  // 賭け金の状態管理（0から開始）
 
     // モーダルが開いた時の初期化処理
     useEffect(() => {
         if (isOpen) {
-            setBetAmount(0); // 開いた時に賭け金をリセット
+            setBetAmount(0); // 開いた時に賭け金をリセット（最小値は0）
         }
     }, [isOpen]);
 
     // モーダルが閉じている場合は何も表示しない
     if (!isOpen) return null;
 
-    // 実際の最大賭け金を計算（0から賭けられる）
+    // 実際の最大賭け金を計算（0ポイント以上、現在のスコア以下）
     const actualMaxBet = Math.max(0, myCurrentScore);
     
     // 賭け金を増減する関数
