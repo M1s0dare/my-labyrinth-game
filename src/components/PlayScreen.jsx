@@ -818,6 +818,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             // デバッグモード時は切り替えられたプレイヤーとして賭ける
             const bettingUserId = debugMode ? effectiveUserId : userId;
             
+            console.log("🥊 [BattleBet] Placing battle bet:", {
+                bettingUserId: bettingUserId.substring(0, 8),
+                betAmount,
+                debugMode,
+                battleId: gameData.activeBattle?.battleId,
+                participants: gameData.activeBattle?.participants?.map(p => p.substring(0, 8))
+            });
+            
             // 自分の賭けポイントを記録
             const updates = {
                 [`playerStates.${bettingUserId}.battleBet`]: betAmount,
@@ -825,6 +833,12 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             };
             
             await updateDoc(gameDocRef, updates);
+            
+            console.log("🥊 [BattleBet] Battle bet placed successfully:", {
+                bettingUserId: bettingUserId.substring(0, 8),
+                betAmount,
+                updatesKeys: Object.keys(updates)
+            });
             
             setIsBattleModalOpen(false);
             setMessage("ポイントを賭けました。相手の入力を待っています...");
@@ -837,11 +851,33 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
 
     // バトル結果処理
     const processBattleResult = async (battle) => {
-        if (!battle || !battle.participants || battle.participants.length !== 2) return;
+        if (!battle || !battle.participants || battle.participants.length !== 2) {
+            console.warn("🥊 [Battle] Invalid battle data:", { battle, hasParticipants: !!battle?.participants, participantCount: battle?.participants?.length });
+            return;
+        }
+        
         // デバッグモード時はeffectiveUserIdで判定
         const localUserId = debugMode ? effectiveUserId : userId;
+        console.log("🥊 [Battle] Starting battle result processing:", {
+            battleId: battle.battleId,
+            status: battle.status,
+            processing: battle.processing,
+            isBattleProcessing,
+            participants: battle.participants.map(p => p.substring(0, 8)),
+            localUserId: localUserId.substring(0, 8),
+            debugMode
+        });
+        
         // 既に処理中のバトルかチェック（重複実行防止）
-        if (battle.status === 'completed' || battle.processing || isBattleProcessing) return;
+        if (battle.status === 'completed' || battle.processing || isBattleProcessing) {
+            console.log("🥊 [Battle] Battle already processed or processing:", {
+                status: battle.status,
+                processing: battle.processing,
+                isBattleProcessing
+            });
+            return;
+        }
+        
         // 追加の重複防止：バトルIDチェック
         const battleId = battle.battleId;
         if (!battleId) {
@@ -1944,7 +1980,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             if (isParticipant && !isBattleModalOpen && battle.status === 'betting') {
                 // 自分がまだポイント選択していない場合：バトルモーダルを表示
                 const myBetStatus = gameData.playerStates[currentUserId]?.battleBet;
-                const hasMyBet = myBetStatus !== undefined && myBetStatus !== null;
+                const hasMyBet = myBetStatus !== undefined && myBetStatus !== null && myBetStatus >= 0;
+                
+                console.log("🥊 [Battle] Checking participant bet status:", {
+                    currentUserId: currentUserId.substring(0, 8),
+                    myBetStatus,
+                    hasMyBet,
+                    isBattleModalOpen,
+                    battleStatus: battle.status
+                });
                 
                 if (!hasMyBet) {
                     console.log("🥊 [Battle] Opening battle modal for participant");
@@ -1953,10 +1997,18 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     setShowBattleWaitingPopup(false); // 待機ポップアップも閉じる
                 } else {
                     // 自分はポイント選択済みだが、相手がまだの場合：待機ポップアップを表示
-                    const allParticipantsBetted = battle.participants?.every(pid => 
-                        gameData.playerStates[pid]?.battleBet !== undefined && 
-                        gameData.playerStates[pid]?.battleBet !== null
-                    );
+                    const allParticipantsBetted = battle.participants?.every(pid => {
+                        const playerBet = gameData.playerStates[pid]?.battleBet;
+                        return playerBet !== undefined && playerBet !== null && playerBet >= 0;
+                    });
+                    
+                    console.log("🥊 [Battle] Checking if all participants have bet:", {
+                        allParticipantsBetted,
+                        participants: battle.participants.map(pid => ({
+                            id: pid.substring(0, 8),
+                            bet: gameData.playerStates[pid]?.battleBet
+                        }))
+                    });
                     
                     if (!allParticipantsBetted && !showBattleWaitingPopup) {
                         console.log("🥊 [Battle] Showing waiting popup for participant who already bet");
@@ -1983,16 +2035,39 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             
             // 全当事者が賭けを完了した場合、結果を処理
             if (battle.status === 'betting' && !battle.processing && !isBattleProcessing) {
-                const allParticipantsBetted = battle.participants?.every(pid => 
-                    gameData.playerStates[pid]?.battleBet !== undefined && 
-                    gameData.playerStates[pid]?.battleBet !== null
-                );
+                const allParticipantsBetted = battle.participants?.every(pid => {
+                    const playerBet = gameData.playerStates[pid]?.battleBet;
+                    return playerBet !== undefined && playerBet !== null && playerBet >= 0;
+                });
+
+                console.log("🥊 [Battle] Checking battle processing conditions:", {
+                    battleStatus: battle.status,
+                    battleProcessing: battle.processing,
+                    isBattleProcessing,
+                    allParticipantsBetted,
+                    participants: battle.participants.map(pid => ({
+                        id: pid.substring(0, 8),
+                        bet: gameData.playerStates[pid]?.battleBet,
+                        betStatus: {
+                            defined: gameData.playerStates[pid]?.battleBet !== undefined,
+                            notNull: gameData.playerStates[pid]?.battleBet !== null,
+                            nonNegative: gameData.playerStates[pid]?.battleBet >= 0
+                        }
+                    }))
+                });
 
                 if (allParticipantsBetted) {
                     // 処理権限の判定：参加者のうち、より小さいuserIdを持つクライアントのみが処理を実行
                     const sortedParticipants = [...battle.participants].sort();
                     const currentUserId = debugMode ? effectiveUserId : userId;
                     const shouldProcess = sortedParticipants[0] === currentUserId;
+
+                    console.log("🥊 [Battle] Processing authorization check:", {
+                        sortedParticipants: sortedParticipants.map(p => p.substring(0, 8)),
+                        currentUserId: currentUserId.substring(0, 8),
+                        authorizedProcessor: sortedParticipants[0].substring(0, 8),
+                        shouldProcess
+                    });
 
                     if (shouldProcess) {
                         setIsBattleProcessing(true); // ここでローカルフラグを即時立てる
@@ -2001,6 +2076,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     } else {
                         console.log("🥊 [Battle] All participants have placed bets, but this client is not authorized to process");
                     }
+                } else {
+                    console.log("🥊 [Battle] Not all participants have bet yet, waiting...");
                 }
             }
         } else if (!gameData?.activeBattle) {
