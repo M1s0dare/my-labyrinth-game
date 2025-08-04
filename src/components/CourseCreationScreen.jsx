@@ -517,15 +517,6 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode, isOnline
                     connectionStatus === 'disconnected' ? 'bg-red-500' :
                     'bg-gray-500'
                 }`}></div>
-                <span className="text-xs text-slate-600">
-                    {connectionStatus === 'connected' ? 'リアルタイム同期中' :
-                     connectionStatus === 'cached' ? 'キャッシュから表示中' :
-                     connectionStatus === 'disconnected' ? '接続に問題があります' :
-                     '接続エラー'}
-                </span>
-                <span className="text-xs text-slate-400">
-                    (最終同期: {new Date(lastSyncTime).toLocaleTimeString()})
-                </span>
             </div>
             
             <div className={`bg-white p-6 rounded-lg shadow-xl mb-6 w-full ${currentGridSize > 6 ? 'max-w-2xl' : 'max-w-lg'}`}>
