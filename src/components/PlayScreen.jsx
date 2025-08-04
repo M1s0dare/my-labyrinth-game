@@ -2102,6 +2102,75 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         }, 100);
                     } else {
                         console.log("🥊 [Battle] Waiting for authorized client to process battle result");
+                        
+                        // *** 追加：全参加者に結果画面を表示するための処理 ***
+                        // 処理権限がないクライアントでも、参加者なら結果表示処理を実行
+                        const isParticipant = battle.participants.includes(currentUserId);
+                        if (isParticipant) {
+                            console.log("🥊 [Battle] Non-authorized participant - showing battle result directly");
+                            
+                            const [player1, player2] = battle.participants;
+                            const player1State = gameData.playerStates[player1];
+                            const player2State = gameData.playerStates[player2];
+                            const player1Bet = player1State?.battleBet || 0;
+                            const player2Bet = player2State?.battleBet || 0;
+                            
+                            let winner = null;
+                            let loser = null;
+                            
+                            if (player1Bet > player2Bet) {
+                                winner = player1;
+                                loser = player2;
+                            } else if (player2Bet > player1Bet) {
+                                winner = player2;
+                                loser = player1;
+                            }
+                            
+                            const winnerName = winner ? getUserNameById(winner) : '';
+                            const loserName = loser ? getUserNameById(loser) : '';
+                            
+                            // 待機ポップアップを即座に閉じる
+                            setShowBattleWaitingPopup(false);
+                            
+                            if (winner) {
+                                // 引き分けでない場合の処理 - 参加者であれば勝敗問わず結果表示
+                                const isWinner = winner === currentUserId;
+                                
+                                console.log(isWinner ? "🎉 [Victory] Setting victory popup for non-authorized winner:" : "💀 [Defeat] Setting defeat popup for non-authorized loser:", {
+                                    userId: currentUserId.substring(0, 8),
+                                    isWinner,
+                                    winner: winner.substring(0, 8),
+                                    loser: loser?.substring(0, 8)
+                                });
+                                
+                                setBattleResultData({
+                                    isWinner: isWinner,
+                                    myBet: player1 === currentUserId ? player1Bet : player2Bet,
+                                    opponentBet: player1 === currentUserId ? player2Bet : player1Bet,
+                                    opponentName: isWinner ? loserName : winnerName,
+                                    isDraw: false
+                                });
+                                setShowBattleResultPopup(true);
+                            } else {
+                                // 引き分けの場合：再戦通知
+                                console.log("🤝 [Draw] Setting rematch notification for non-authorized participant:", {
+                                    userId: currentUserId.substring(0, 8)
+                                });
+                                
+                                const drawCount = (battle.drawCount || 0) + 1;
+                                
+                                setBattleResultData({
+                                    isWinner: false,
+                                    myBet: player1 === currentUserId ? player1Bet : player2Bet,
+                                    opponentBet: player1 === currentUserId ? player2Bet : player1Bet,
+                                    opponentName: getUserNameById(player1 === currentUserId ? player2 : player1),
+                                    isDraw: true,
+                                    isRematch: true,
+                                    drawCount: drawCount
+                                });
+                                setShowBattleResultPopup(true);
+                            }
+                        }
                     }
                 } else {
                     console.log("🥊 [Battle] Not all participants have placed bets yet");
