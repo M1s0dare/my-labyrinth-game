@@ -642,9 +642,9 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 const newBattleId = `battle_${Date.now()}_${participantPair.join('-')}_${positionKey}_${Math.random().toString(36).substring(2, 8)}`;
                 const existingBattleId = gameData.activeBattle?.battleId;
                 
-                // 処理済みバトルIDチェック（クライアントサイド重複防止）
-                const alreadyProcessed = window.processedBattleIds && 
-                    window.processedBattleIds.some(id => 
+                // 作成済みバトルIDチェック（クライアントサイド重複防止）
+                const alreadyCreated = window.createdBattleIds && 
+                    window.createdBattleIds.some(id => 
                         id.includes(participantPair.join('-')) && 
                         id.includes(positionKey)
                     );
@@ -656,13 +656,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     existingBattleWithSameParticipants,
                     existingBattleId,
                     newBattleId,
-                    alreadyProcessed,
+                    alreadyCreated,
                     canStartBattle: !opponentInBattle && !currentPlayerInBattle && !opponentIsGoaled && !currentPlayerIsGoaled && 
-                        !existingBattleAtPosition && !existingBattleWithSameParticipants && !alreadyProcessed
+                        !existingBattleAtPosition && !existingBattleWithSameParticipants && !alreadyCreated
                 });
                 
                 if (!opponentInBattle && !currentPlayerInBattle && !opponentIsGoaled && !currentPlayerIsGoaled && 
-                    !existingBattleAtPosition && !existingBattleWithSameParticipants && !alreadyProcessed) {
+                    !existingBattleAtPosition && !existingBattleWithSameParticipants && !alreadyCreated) {
                     console.log("🥊 [Battle] Starting new battle:", {
                         player1: operatingUserId.substring(0, 8),
                         player2: battleOpponent.substring(0, 8),
@@ -672,7 +672,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         preventedDuplicates: {
                             existingBattleAtPosition,
                             existingBattleWithSameParticipants,
-                            alreadyProcessed
+                            alreadyCreated
                         }
                     });
                     
@@ -733,16 +733,22 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         }
                     }
                     
-                    // 処理済みバトルIDを記録（クライアントサイド重複防止）
-                    if (!window.processedBattleIds) {
-                        window.processedBattleIds = [];
+                    // バトル作成履歴を記録（結果処理用のprocessedBattleIdsとは別管理）
+                    if (!window.createdBattleIds) {
+                        window.createdBattleIds = [];
                     }
-                    window.processedBattleIds.push(newBattleId);
+                    window.createdBattleIds.push(newBattleId);
                     
-                    // 古いバトルIDを削除（メモリリーク防止）
-                    if (window.processedBattleIds.length > 20) {
-                        window.processedBattleIds = window.processedBattleIds.slice(-10);
+                    // 古いバトル作成IDを削除（メモリリーク防止）
+                    if (window.createdBattleIds.length > 20) {
+                        window.createdBattleIds = window.createdBattleIds.slice(-10);
                     }
+                    
+                    console.log("🥊 [Battle] Battle creation logged:", {
+                        battleId: newBattleId,
+                        createdBattleIds: window.createdBattleIds.length,
+                        note: "Separate from processedBattleIds for result processing"
+                    });
                     
                     // 両プレイヤーのバトル状態をリセット
                     updates[`playerStates.${operatingUserId}.battleBet`] = null;
@@ -884,22 +890,29 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             console.warn("🥊 [Battle] No battleId found, skipping processing");
             return;
         }
-        // 既に処理済みのバトルIDかチェック（ローカル状態での重複防止）
+        // 既に処理済みのバトルIDかチェック（結果処理用の重複防止）
         if (window.processedBattleIds && window.processedBattleIds.includes(battleId)) {
-            console.log("🥊 [Battle] Battle already processed:", battleId);
+            console.log("🥊 [Battle] Battle result already processed:", battleId);
             return;
         }
         console.log("🥊 [Battle] Starting battle result processing for battleId:", battleId);
         setIsBattleProcessing(true);
-        // 処理済みバトルIDを記録
+        // 処理済みバトルIDを記録（結果処理用）
         if (!window.processedBattleIds) {
             window.processedBattleIds = [];
         }
         window.processedBattleIds.push(battleId);
-        // 古いバトルIDを削除（メモリリーク防止）
+        // 古い結果処理IDを削除（メモリリーク防止）
         if (window.processedBattleIds.length > 20) {
             window.processedBattleIds = window.processedBattleIds.slice(-10);
         }
+        
+        console.log("🥊 [Battle] Result processing logged:", {
+            battleId,
+            processedBattleIds: window.processedBattleIds.length,
+            createdBattleIds: window.createdBattleIds?.length || 0,
+            note: "Separate tracking for creation vs result processing"
+        });
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
             
