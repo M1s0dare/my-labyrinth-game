@@ -1081,38 +1081,25 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 setShowBattleWaitingPopup(false);
                 
                 if (winner) {
-                    // 引き分けでない場合の処理
+                    // 引き分けでない場合の処理 - 参加者であれば勝敗問わず結果表示
                     const isWinner = winner === localUserId;
-                    const isLoser = loser === localUserId;
                     
-                    if (isWinner) {
-                        // 勝者への普通のポップアップ（質素な画面）
-                        console.log("🎉 [Victory] Setting victory popup for winner:", {
-                            userId: localUserId.substring(0, 8)
-                        });
-                        setBattleResultData({
-                            isWinner: true,
-                            myBet: player1 === localUserId ? player1Bet : player2Bet,
-                            opponentBet: player1 === localUserId ? player2Bet : player1Bet,
-                            opponentName: loserName,
-                            isDraw: false
-                        });
-                        setShowBattleResultPopup(true);
-                        
-                    } else if (isLoser) {
-                        // 敗者への敗北ポップアップ
-                        console.log("💀 [Defeat] Setting defeat popup for loser:", {
-                            userId: localUserId.substring(0, 8)
-                        });
-                        setBattleResultData({
-                            isWinner: false,
-                            myBet: player1 === localUserId ? player1Bet : player2Bet,
-                            opponentBet: player1 === localUserId ? player2Bet : player1Bet,
-                            opponentName: winnerName,
-                            isDraw: false
-                        });
-                        setShowBattleResultPopup(true);
-                    }
+                    // 勝者・敗者どちらでも結果ポップアップを表示
+                    console.log(isWinner ? "🎉 [Victory] Setting victory popup for winner:" : "💀 [Defeat] Setting defeat popup for loser:", {
+                        userId: localUserId.substring(0, 8),
+                        isWinner,
+                        winner: winner.substring(0, 8),
+                        loser: loser?.substring(0, 8)
+                    });
+                    
+                    setBattleResultData({
+                        isWinner: isWinner,
+                        myBet: player1 === localUserId ? player1Bet : player2Bet,
+                        opponentBet: player1 === localUserId ? player2Bet : player1Bet,
+                        opponentName: isWinner ? loserName : winnerName,
+                        isDraw: false
+                    });
+                    setShowBattleResultPopup(true);
                 } else {
                     // 引き分けの場合：再戦通知
                     console.log("🤝 [Draw] Setting rematch notification for participant:", {
