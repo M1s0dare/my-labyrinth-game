@@ -77,6 +77,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     const [showBattleWaitDialog, setShowBattleWaitDialog] = useState(false);
     const [battleParticipants, setBattleParticipants] = useState([]);
 
+    // ゴール通知ポップアップ（四人対戦用）
+    const [showGoalNotificationPopup, setShowGoalNotificationPopup] = useState(false);
+    const [goalNotificationData, setGoalNotificationData] = useState(null);
+
     // デバッグモード用のプレイヤー切り替え機能
     const [debugCurrentPlayerId, setDebugCurrentPlayerId] = useState(userId);
     const [debugPlayerStates, setDebugPlayerStates] = useState({});
@@ -551,19 +555,78 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 const opponentIsGoaled = opponentState?.goalTime;
                 const currentPlayerIsGoaled = currentPlayerState?.goalTime;
                 
-                if (!opponentInBattle && !currentPlayerInBattle && !opponentIsGoaled && !currentPlayerIsGoaled) {
+                // 重複バトル防止：この位置でのバトルが既に存在しないかチェック
+                const positionKey = `${newR}-${newC}`;
+                const existingBattleAtPosition = gameData.activeBattle && 
+                    (gameData.activeBattle.position === positionKey || 
+                     gameData.activeBattle.positionKey === positionKey);
+                
+                // 同じ組み合わせのプレイヤー間でのバトルが既に存在しないかチェック
+                const participantPair = [operatingUserId, battleOpponent].sort();
+                const existingBattleWithSameParticipants = gameData.activeBattle && 
+                    gameData.activeBattle.participants && 
+                    gameData.activeBattle.participants.sort().join(',') === participantPair.join(',');
+                
+                // バトルID重複チェック（追加保護）
+                const newBattleId = `battle_${Date.now()}_${participantPair.join('-')}_${positionKey}_${Math.random().toString(36).substring(2, 8)}`;
+                const existingBattleId = gameData.activeBattle?.battleId;
+                
+                // 処理済みバトルIDチェック（クライアントサイド重複防止）
+                const alreadyProcessed = window.processedBattleIds && 
+                    window.processedBattleIds.some(id => 
+                        id.includes(participantPair.join('-')) && 
+                        id.includes(positionKey)
+                    );
+                
+                console.log("🥊 [Battle] Duplicate prevention check:", {
+                    positionKey,
+                    participantPair: participantPair.join(','),
+                    existingBattleAtPosition,
+                    existingBattleWithSameParticipants,
+                    existingBattleId,
+                    newBattleId,
+                    alreadyProcessed,
+                    canStartBattle: !opponentInBattle && !currentPlayerInBattle && !opponentIsGoaled && !currentPlayerIsGoaled && 
+                        !existingBattleAtPosition && !existingBattleWithSameParticipants && !alreadyProcessed
+                });
+                
+                if (!opponentInBattle && !currentPlayerInBattle && !opponentIsGoaled && !currentPlayerIsGoaled && 
+                    !existingBattleAtPosition && !existingBattleWithSameParticipants && !alreadyProcessed) {
                     console.log("🥊 [Battle] Starting new battle:", {
                         player1: operatingUserId.substring(0, 8),
                         player2: battleOpponent.substring(0, 8),
-                        position: { r: newR, c: newC }
+                        position: { r: newR, c: newC },
+                        positionKey,
+                        battleId: newBattleId,
+                        preventedDuplicates: {
+                            existingBattleAtPosition,
+                            existingBattleWithSameParticipants,
+                            alreadyProcessed
+                        }
                     });
                     
-                    // バトル状態を設定（新しい構造）
+                    // バトル状態を設定（強化された重複防止情報を含める）
                     updates.activeBattle = {
-                        participants: [operatingUserId, battleOpponent],
+                        participants: participantPair, // ソート済み
                         startTime: serverTimestamp(),
-                        status: 'betting'
+                        status: 'betting',
+                        position: { r: newR, c: newC }, // 座標オブジェクト
+                        positionKey: positionKey, // 文字列キー
+                        participantPair: participantPair.join('-'), // 参加者ペア文字列
+                        battleId: newBattleId, // ユニークなバトルID
+                        processing: false
                     };
+                    
+                    // 処理済みバトルIDを記録（クライアントサイド重複防止）
+                    if (!window.processedBattleIds) {
+                        window.processedBattleIds = [];
+                    }
+                    window.processedBattleIds.push(newBattleId);
+                    
+                    // 古いバトルIDを削除（メモリリーク防止）
+                    if (window.processedBattleIds.length > 20) {
+                        window.processedBattleIds = window.processedBattleIds.slice(-10);
+                    }
                     
                     // 両プレイヤーのバトル状態をリセット
                     updates[`playerStates.${operatingUserId}.battleBet`] = null;
@@ -672,8 +735,32 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         // 既に処理中のバトルかチェック（重複実行防止）
         if (battle.status === 'completed' || battle.processing || isBattleProcessing) return;
         
-        console.log("🥊 [Battle] Starting battle result processing");
+        // 追加の重複防止：バトルIDチェック
+        const battleId = battle.battleId;
+        if (!battleId) {
+            console.warn("🥊 [Battle] No battleId found, skipping processing");
+            return;
+        }
+        
+        // 既に処理済みのバトルIDかチェック（ローカル状態での重複防止）
+        if (window.processedBattleIds && window.processedBattleIds.includes(battleId)) {
+            console.log("🥊 [Battle] Battle already processed:", battleId);
+            return;
+        }
+        
+        console.log("🥊 [Battle] Starting battle result processing for battleId:", battleId);
         setIsBattleProcessing(true);
+        
+        // 処理済みバトルIDを記録
+        if (!window.processedBattleIds) {
+            window.processedBattleIds = [];
+        }
+        window.processedBattleIds.push(battleId);
+        
+        // 古いバトルIDを削除（メモリリーク防止）
+        if (window.processedBattleIds.length > 20) {
+            window.processedBattleIds = window.processedBattleIds.slice(-10);
+        }
         
         try {
             const gameDocRef = doc(db, `artifacts/${appId}/public/data/labyrinthGames`, gameId);
@@ -924,6 +1011,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         setShowBattleResultPopup(false);
         setBattleResultData(null);
         setShowBattleWaitingPopup(false);
+        
+        // ゴール通知関連のリセット
+        setShowGoalNotificationPopup(false);
+        setGoalNotificationData(null);
         
         // 5. デバッグモード関連の状態をリセット
         setDebugCurrentPlayerId(userId);
@@ -1328,6 +1419,52 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             }
         }
     }, [gameData?.playerStates, gameData?.players, gameData?.mode, myPlayerState?.goalTime, showResultModal, myPlayerState?.score]);
+
+    // 四人対戦モード：ゴール通知監視
+    useEffect(() => {
+        if (!gameData || gameData.mode !== '4player' || !gameData.players || !gameData.playerStates) return;
+        
+        // ゴール済みプレイヤーのリストを取得
+        const goaledPlayers = gameData.players.filter(pid => 
+            gameData.playerStates[pid]?.goalTime
+        ).sort((a, b) => {
+            // ゴール時刻順でソート
+            const timeA = gameData.playerStates[a]?.goalTime?.seconds || gameData.playerStates[a]?.goalTime;
+            const timeB = gameData.playerStates[b]?.goalTime?.seconds || gameData.playerStates[b]?.goalTime;
+            return timeA - timeB;
+        });
+        
+        const goaledCount = goaledPlayers.length;
+        
+        // 1人目、2人目、3人目のゴール時に通知を表示
+        if (goaledCount >= 1 && goaledCount <= 3) {
+            // 最新のゴール達成者を取得
+            const latestGoaledPlayer = goaledPlayers[goaledCount - 1];
+            const goalerName = getUserNameById(latestGoaledPlayer);
+            const isMyself = latestGoaledPlayer === (debugMode ? effectiveUserId : userId);
+            
+            // 既に同じ人数でのゴール通知を表示済みかチェック
+            if (!goalNotificationData || goalNotificationData.goaledCount !== goaledCount) {
+                console.log("🎉 [GoalNotification] Showing goal notification:", {
+                    goaledCount,
+                    latestGoaler: latestGoaledPlayer.substring(0, 8),
+                    goalerName,
+                    isMyself,
+                    debugMode
+                });
+                
+                setGoalNotificationData({
+                    goaledCount,
+                    goalerName,
+                    isMyself,
+                    rank: goaledCount,
+                    totalPlayers: gameData.players.length,
+                    remainingPlayers: gameData.players.length - goaledCount
+                });
+                setShowGoalNotificationPopup(true);
+            }
+        }
+    }, [gameData?.playerStates, gameData?.players, gameData?.mode, getUserNameById, debugMode, effectiveUserId, userId, goalNotificationData]);
 
     const currentGridSize = STANDARD_GRID_SIZE;
 
@@ -2482,6 +2619,51 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         
                         <button 
                             onClick={() => setShowBattleResultPopup(false)}
+                            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                        >
+                            確認
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ゴール通知ポップアップ（四人対戦用） */}
+            {showGoalNotificationPopup && goalNotificationData && (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md text-center">
+                        <h2 className="text-2xl font-bold mb-4 flex items-center justify-center">
+                            🎉 {goalNotificationData.rank}位ゴール達成！
+                        </h2>
+                        
+                        <div className="mb-4 p-4 bg-yellow-50 rounded-lg">
+                            <div className="text-lg font-semibold text-yellow-800 mb-2">
+                                {goalNotificationData.isMyself ? (
+                                    <span className="text-green-600">🏆 あなたがゴールしました！</span>
+                                ) : (
+                                    <span>🏃 {goalNotificationData.goalerName}がゴールしました</span>
+                                )}
+                            </div>
+                            <div className="text-sm text-gray-600 space-y-1">
+                                <p>順位: {goalNotificationData.rank}位 / {goalNotificationData.totalPlayers}人</p>
+                                <p>残り: {goalNotificationData.remainingPlayers}人</p>
+                                {goalNotificationData.goaledCount >= 3 ? (
+                                    <p className="text-red-600 font-semibold">ゲーム終了！</p>
+                                ) : (
+                                    <p className="text-blue-600">ゲーム続行中...</p>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <button 
+                            onClick={() => {
+                                setShowGoalNotificationPopup(false);
+                                // 3人目のゴール時は少し遅れてリザルト画面を表示
+                                if (goalNotificationData.goaledCount >= 3) {
+                                    setTimeout(() => {
+                                        // ゲーム終了処理は既存のuseEffectに委任
+                                    }, 2000);
+                                }
+                            }}
                             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
                         >
                             確認
