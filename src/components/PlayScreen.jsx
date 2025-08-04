@@ -1080,7 +1080,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 // 待機ポップアップを即座に閉じる
                 setShowBattleWaitingPopup(false);
                 
-                if (winner && !loser) {
+                if (winner) {
                     // 引き分けでない場合の処理
                     const isWinner = winner === localUserId;
                     const isLoser = loser === localUserId;
