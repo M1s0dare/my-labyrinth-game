@@ -10,9 +10,7 @@ import App from './App';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 // アプリケーションをレンダリング
-// React.StrictModeで開発時のバグ検出を強化
+// StrictModeを無効化（Firebase認証の重複実行を防ぐため）
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <App />
 );
