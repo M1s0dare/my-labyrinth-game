@@ -1014,6 +1014,27 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     updates[`playerStates.${winner}.score`] = increment(5);
                     // 敗者に1ターン行動不能状態を付与
                     updates[`playerStates.${loser}.skipNextTurn`] = true;
+                    
+                    // バトル完了
+                    updates.activeBattle = null;
+                } else {
+                    // 引き分けの場合：再戦を開始
+                    console.log("🤝 [Draw] Battle is a draw, starting rematch:", {
+                        participants: battle.participants.map(p => p.substring(0, 8)),
+                        battleId: battle.battleId
+                    });
+                    
+                    // 引き分け回数をカウント
+                    const drawCount = (currentBattle.drawCount || 0) + 1;
+                    updates[`activeBattle.drawCount`] = drawCount;
+                    updates[`activeBattle.status`] = 'betting'; // ベッティング状態に戻す
+                    updates[`activeBattle.processing`] = false; // 処理中フラグをクリア
+                    
+                    // バトルベット状態はクリアして再入力可能にする（ポイントは返却しない）
+                    updates[`playerStates.${player1}.battleBet`] = null;
+                    updates[`playerStates.${player2}.battleBet`] = null;
+                    
+                    console.log("🔄 [Rematch] Draw count:", drawCount, "- Restarting betting phase");
                 }
                 
                 // トランザクション内でアップデート
@@ -1065,24 +1086,18 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     const isLoser = loser === localUserId;
                     
                     if (isWinner) {
-                        // 勝者への豪華な勝利画面
-                        const victoryData = {
-                            opponentName: loserName,
+                        // 勝者への普通のポップアップ（質素な画面）
+                        console.log("🎉 [Victory] Setting victory popup for winner:", {
+                            userId: localUserId.substring(0, 8)
+                        });
+                        setBattleResultData({
+                            isWinner: true,
                             myBet: player1 === localUserId ? player1Bet : player2Bet,
                             opponentBet: player1 === localUserId ? player2Bet : player1Bet,
-                            pointsGained: 5
-                        };
-                        
-                        console.log("🎉 [Victory] Setting victory screen for winner:", {
-                            userId: localUserId.substring(0, 8),
-                            victoryData
+                            opponentName: loserName,
+                            isDraw: false
                         });
-                        setVictoryScreenData(victoryData);
-                        
-                        // 勝利画面を表示
-                        setTimeout(() => {
-                            setShowBattleVictoryScreen(true);
-                        }, 500);
+                        setShowBattleResultPopup(true);
                         
                     } else if (isLoser) {
                         // 敗者への敗北ポップアップ
@@ -1099,16 +1114,22 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         setShowBattleResultPopup(true);
                     }
                 } else {
-                    // 引き分けの場合（winner === null）
-                    console.log("🤝 [Draw] Setting draw popup for participant:", {
+                    // 引き分けの場合：再戦通知
+                    console.log("🤝 [Draw] Setting rematch notification for participant:", {
                         userId: localUserId.substring(0, 8)
                     });
+                    
+                    // 引き分け回数を取得
+                    const drawCount = (battle.drawCount || 0) + 1;
+                    
                     setBattleResultData({
                         isWinner: false,
                         myBet: player1 === localUserId ? player1Bet : player2Bet,
                         opponentBet: player1 === localUserId ? player2Bet : player1Bet,
                         opponentName: getUserNameById(player1 === localUserId ? player2 : player1),
-                        isDraw: true
+                        isDraw: true,
+                        isRematch: true,
+                        drawCount: drawCount
                     });
                     setShowBattleResultPopup(true);
                 }
@@ -1123,7 +1144,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！`);
                     await sendSystemChatMessage(`💀 ${loserName}は次のターン行動不能になります。`);
                 } else {
-                    await sendSystemChatMessage(`🤝 バトル結果: 引き分け`);
+                    // 引き分けの場合は再戦通知
+                    const drawCount = (battle.drawCount || 0) + 1;
+                    await sendSystemChatMessage(`🤝 バトル結果: 引き分け（${drawCount}回目）`);
+                    await sendSystemChatMessage(`🔄 再戦開始！再度ポイントを賭けてください。`);
                 }
             }
             
@@ -1133,9 +1157,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             } else if (loser === localUserId) {
                 setMessage(`💀 バトル敗北... 次のターン行動不能`);
             } else if (isParticipant) {
-                setMessage(`🤝 バトル引き分け`);
+                const drawCount = (battle.drawCount || 0) + 1;
+                setMessage(`🤝 引き分け（${drawCount}回目）- 再戦開始！`);
             } else {
-                setMessage(`⚔️ バトル終了: ${winner ? winnerName + 'の勝利' : '引き分け'}`);
+                setMessage(`⚔️ バトル終了: ${winner ? winnerName + 'の勝利' : '引き分け・再戦中'}`);
             }
             
             // バトル関連状態をリセット
@@ -2015,9 +2040,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 const myBetStatus = gameData.playerStates[currentUserId]?.battleBet;
                 const hasMyBet = myBetStatus !== undefined && myBetStatus !== null && myBetStatus >= 0;
                 
-                // 1. まだポイント選択していない → バトルモーダル表示
+                // 1. まだポイント選択していない または 再戦中 → バトルモーダル表示
                 if (!hasMyBet && battle.status === 'betting') {
-                    console.log("🥊 [Battle] Participant needs to bet - showing battle modal");
+                    const isRematch = battle.drawCount && battle.drawCount > 0;
+                    console.log("🥊 [Battle] Participant needs to bet - showing battle modal", {
+                        isRematch,
+                        drawCount: battle.drawCount || 0
+                    });
                     setIsBattleModalOpen(true);
                     setShowBattleWaitDialog(false);
                     setShowBattleWaitingPopup(false);
@@ -2134,8 +2163,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     }, [gameData?.status, gameData?.interruptedBy, gameData?.interruptedPlayerName, userId, debugMode, effectiveUserId]);
     
-    // バトル勝利画面の自動閉じ機能
+    // バトル勝利画面の自動閉じ機能（無効化：普通のポップアップに統一）
     useEffect(() => {
+        // 豪華な勝利画面は無効化されたため、この処理も無効化
+        return;
+        
         if (showBattleVictoryScreen) {
             console.log("🎉 [Victory] Victory screen is now visible, setting auto-close timer");
             const timer = setTimeout(() => {
@@ -2151,8 +2183,11 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
         }
     }, [showBattleVictoryScreen]);
 
-    // バトル勝利画面の状態監視（デバッグ用）
+    // バトル勝利画面の状態監視（デバッグ用）- 無効化：普通のポップアップに統一
     useEffect(() => {
+        // 豪華な勝利画面は無効化されたため、この監視も無効化
+        return;
+        
         console.log("🎉 [Victory] Victory screen state changed:", {
             showBattleVictoryScreen,
             hasVictoryScreenData: !!victoryScreenData,
@@ -2758,6 +2793,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     opponentName={gameData?.activeBattle?.participants?.filter(id => id !== (debugMode ? effectiveUserId : userId)).map(id => getUserNameById(id)).join(', ') || "相手"}
                     myName={effectiveUserId}
                     myCurrentScore={effectivePlayerState?.score || 0}
+                    isRematch={gameData?.activeBattle?.drawCount > 0}
+                    drawCount={gameData?.activeBattle?.drawCount || 0}
                 />
             )}
 
@@ -2960,12 +2997,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
                         <h2 className="text-2xl font-bold mb-4 flex items-center justify-center">
                             <Swords size={28} className="mr-2"/>
-                            {battleResultData.isDraw ? '🤝 引き分け' : 
-                             battleResultData.isWinner ? '🏆 勝利！' : '💀 敗北...'}
+                            {battleResultData.isDraw ? 
+                                (battleResultData.isRematch ? '🔄 引き分け・再戦' : '🤝 引き分け') : 
+                                (battleResultData.isWinner ? '🏆 勝利！' : '💀 敗北...')}
                         </h2>
                         
                         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                            <p className="text-lg font-semibold mb-2">バトル結果</p>
+                            <p className="text-lg font-semibold mb-2">
+                                {battleResultData.isRematch ? `バトル結果（${battleResultData.drawCount}回目）` : 'バトル結果'}
+                            </p>
                             <div className="flex justify-between items-center mb-2">
                                 <span className="font-medium">あなた:</span>
                                 <span className="text-lg font-bold">{battleResultData.myBet}pt</span>
@@ -2976,7 +3016,15 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                             </div>
                         </div>
                         
-                        {!battleResultData.isDraw && (
+                        {battleResultData.isRematch ? (
+                            <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-300">
+                                <p className="text-sm text-yellow-800 font-semibold mb-1">🔄 再戦開始！</p>
+                                <p className="text-xs text-yellow-700">
+                                    引き分けのため再戦を行います。<br/>
+                                    賭けたポイントは保持されたまま、再度ポイントを選択してください。
+                                </p>
+                            </div>
+                        ) : !battleResultData.isDraw && (
                             <p className="text-sm text-gray-600 mb-4">
                                 {battleResultData.isWinner ? 
                                     "勝利ボーナス: +5pt" : 
@@ -2989,13 +3037,21 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 console.log("🥊 [BattleResult] Closing battle result popup and resetting related states");
                                 setShowBattleResultPopup(false);
                                 setBattleResultData(null);
-                                // 関連するバトル状態もリセット
-                                setIsBattleModalOpen(false);
-                                setShowBattleWaitingPopup(false);
+                                // 再戦の場合はバトルモーダルを開く
+                                if (battleResultData.isRematch) {
+                                    console.log("🔄 [Rematch] Opening battle modal for rematch");
+                                    setTimeout(() => {
+                                        setIsBattleModalOpen(true);
+                                    }, 100);
+                                } else {
+                                    // 関連するバトル状態もリセット
+                                    setIsBattleModalOpen(false);
+                                    setShowBattleWaitingPopup(false);
+                                }
                             }}
                             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
                         >
-                            確認
+                            {battleResultData.isRematch ? '🔄 再戦開始' : '確認'}
                         </button>
                     </div>
                 </div>
@@ -3046,8 +3102,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 </div>
             )}
 
-            {/* バトル勝利画面（豪華版） */}
-            {showBattleVictoryScreen && victoryScreenData && (() => {
+            {/* バトル勝利画面（豪華版）- 無効化：普通のポップアップに統一 */}
+            {false && showBattleVictoryScreen && victoryScreenData && (() => {
                 console.log("🎉 [Victory] Rendering battle victory screen:", {
                     showBattleVictoryScreen,
                     victoryScreenData,
