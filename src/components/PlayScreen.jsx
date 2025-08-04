@@ -676,8 +676,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         }
                     });
                     
-                    // バトル状態を設定（強化された重複防止情報を含める）
-                    updates.activeBattle = {
+                    // 新しいバトルオブジェクトを作成
+                    const newBattle = {
                         participants: participantPair, // ソート済み
                         startTime: serverTimestamp(),
                         status: 'betting',
@@ -687,6 +687,51 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                         battleId: newBattleId, // ユニークなバトルID
                         processing: false
                     };
+                    
+                    // 既存のactiveBattleがあるかチェック
+                    if (gameData.activeBattle && gameData.activeBattle.status !== 'completed') {
+                        // activeBattleが存在する場合、バトルキューに追加
+                        const existingQueue = gameData.battleQueue || [];
+                        updates.battleQueue = [...existingQueue, newBattle];
+                        console.log("🥊 [BattleQueue] Added battle to queue (active battle exists):", {
+                            newBattleId,
+                            currentActiveBattleId: gameData.activeBattle.battleId,
+                            queueLength: existingQueue.length + 1
+                        });
+                        
+                        setMessage("バトル発生！他のバトル終了後に開始されます。");
+                        sendSystemChatMessage(`⚔️ ${getUserNameById(operatingUserId)}と${getUserNameById(battleOpponent)}のバトルがキューに追加されました！`);
+                    } else {
+                        // activeBattleが存在しない場合、直接設定
+                        updates.activeBattle = newBattle;
+                        console.log("🥊 [Battle] Set as active battle (no existing active battle):", newBattleId);
+                        
+                        // バトルモーダルを開く（この時点では当事者のみ）
+                        setIsBattleModalOpen(true);
+                        setMessage("バトル発生！ポイントを賭けてください。");
+                        
+                        // オープンチャットに通知（ランダム選択されたことを明示）
+                        const myName = getUserNameById(operatingUserId);
+                        const opponentName = getUserNameById(battleOpponent);
+                        
+                        // 移動先に複数プレイヤーがいた場合の説明を追加
+                        const otherPlayersAtPosition = Object.entries(gameData.playerStates || {})
+                            .filter(([pid, ps]) => {
+                                return pid !== operatingUserId && 
+                                       ps.position && 
+                                       !ps.goalTime && 
+                                       ps.position.r === newR && 
+                                       ps.position.c === newC;
+                            });
+                        
+                        if (otherPlayersAtPosition.length > 1) {
+                            const allOpponentNames = otherPlayersAtPosition.map(([pid]) => getUserNameById(pid)).join('、');
+                            sendSystemChatMessage(`🎯 (${newC + 1},${newR + 1})に複数プレイヤー検出！ランダム選択の結果...`);
+                            sendSystemChatMessage(`⚔️ ${myName} vs ${opponentName} のバトル開始！（候補: ${allOpponentNames}）`);
+                        } else {
+                            sendSystemChatMessage(`⚔️ ${myName}と${opponentName}でバトルが発生しました！`);
+                        }
+                    }
                     
                     // 処理済みバトルIDを記録（クライアントサイド重複防止）
                     if (!window.processedBattleIds) {
@@ -704,32 +749,6 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     updates[`playerStates.${battleOpponent}.battleBet`] = null;
                     updates[`playerStates.${operatingUserId}.inBattleWith`] = battleOpponent;
                     updates[`playerStates.${battleOpponent}.inBattleWith`] = operatingUserId;
-                    
-                    // オープンチャットに通知（ランダム選択されたことを明示）
-                    const myName = getUserNameById(operatingUserId);
-                    const opponentName = getUserNameById(battleOpponent);
-                    
-                    // 移動先に複数プレイヤーがいた場合の説明を追加
-                    const otherPlayersAtPosition = Object.entries(gameData.playerStates || {})
-                        .filter(([pid, ps]) => {
-                            return pid !== operatingUserId && 
-                                   ps.position && 
-                                   !ps.goalTime && 
-                                   ps.position.r === newR && 
-                                   ps.position.c === newC;
-                        });
-                    
-                    if (otherPlayersAtPosition.length > 1) {
-                        const allOpponentNames = otherPlayersAtPosition.map(([pid]) => getUserNameById(pid)).join('、');
-                        sendSystemChatMessage(`🎯 (${newC + 1},${newR + 1})に複数プレイヤー検出！ランダム選択の結果...`);
-                        sendSystemChatMessage(`⚔️ ${myName} vs ${opponentName} のバトル開始！（候補: ${allOpponentNames}）`);
-                    } else {
-                        sendSystemChatMessage(`⚔️ ${myName}と${opponentName}でバトルが発生しました！`);
-                    }
-                    
-                    // バトルモーダルを開く（この時点では当事者のみ）
-                    setIsBattleModalOpen(true);
-                    setMessage("バトル発生！ポイントを賭けてください。");
                 } else {
                     console.log("⚠️ [Battle] Cannot start battle:", {
                         currentPlayerInBattle,
@@ -857,6 +876,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 
                 const currentData = gameDoc.data();
                 const currentBattle = currentData.activeBattle;
+                const battleQueue = currentData.battleQueue || [];
                 
                 // 再度チェック：既に処理済みかまたは異なるバトルか確認
                 if (!currentBattle || 
@@ -883,7 +903,8 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     player1: player1.substring(0, 8),
                     player2: player2.substring(0, 8),
                     player1Bet,
-                    player2Bet
+                    player2Bet,
+                    queueLength: battleQueue.length
                 });
                 
                 let winner = null;
@@ -902,9 +923,26 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                     [`playerStates.${player1}.inBattleWith`]: null,
                     [`playerStates.${player2}.inBattleWith`]: null,
                     [`playerStates.${player1}.battleBet`]: null,
-                    [`playerStates.${player2}.battleBet`]: null,
-                    activeBattle: null
+                    [`playerStates.${player2}.battleBet`]: null
                 };
+                
+                // 次のバトルがキューにある場合は、それをactiveBattleに設定
+                if (battleQueue.length > 0) {
+                    const nextBattle = battleQueue[0];
+                    const remainingQueue = battleQueue.slice(1);
+                    
+                    console.log("🥊 [BattleQueue] Moving next battle from queue to active:", {
+                        nextBattleId: nextBattle.battleId,
+                        remainingQueueLength: remainingQueue.length
+                    });
+                    
+                    updates.activeBattle = nextBattle;
+                    updates.battleQueue = remainingQueue;
+                } else {
+                    // キューが空の場合はactiveBattleをクリア
+                    updates.activeBattle = null;
+                    console.log("🥊 [BattleQueue] No more battles in queue, clearing activeBattle");
+                }
                 
                 if (winner) {
                     // 勝者に5ポイント付与
@@ -938,24 +976,43 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             if (winner) {
                 const winnerName = getUserNameById(winner);
                 const loserName = getUserNameById(loser);
+                
+                console.log("🎉 [Victory] Processing battle result display:", {
+                    winner: winner.substring(0, 8),
+                    loser: loser.substring(0, 8),
+                    localUserId: localUserId.substring(0, 8),
+                    actualUserId: userId.substring(0, 8),
+                    debugMode,
+                    isWinner: winner === localUserId,
+                    isLoser: loser === localUserId,
+                    isParticipant: winner === localUserId || loser === localUserId
+                });
+                
                 // 当事者にバトル結果ポップアップを表示
                 if (winner === localUserId || loser === localUserId) {
                     setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
                     // 勝利時は豪華な勝利画面を表示
                     if (winner === localUserId) {
-                        setVictoryScreenData({
+                        const victoryData = {
                             opponentName: loserName,
                             myBet: player1 === localUserId ? player1Bet : player2Bet,
                             opponentBet: player1 === localUserId ? player2Bet : player1Bet,
                             pointsGained: 5
-                        });
+                        };
+                        
+                        console.log("🎉 [Victory] Setting victory screen data:", victoryData);
+                        setVictoryScreenData(victoryData);
+                        
                         // 勝利画面を少し遅らせて表示（演出効果）
                         setTimeout(() => {
+                            console.log("🎉 [Victory] Showing battle victory screen now");
                             setShowBattleVictoryScreen(true);
                         }, 500);
+                        
                         console.log("🎉 [Victory] Battle victory screen will be displayed for user:", localUserId.substring(0, 8));
                     } else {
                         // 敗北時は通常のポップアップ
+                        console.log("💀 [Defeat] Showing defeat popup for user:", localUserId.substring(0, 8));
                         setBattleResultData({
                             isWinner: false,
                             myBet: player1 === localUserId ? player1Bet : player2Bet,
@@ -971,26 +1028,35 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 await sendSystemChatMessage(`🏆 バトル結果: ${winnerName}の勝利！`);
                 await sendSystemChatMessage(`💀 ${loserName}は次のターン行動不能になります。`);
                 
-                // 個人メッセージ（当事者にはポイント数を表示）
-                if (winner === userId) {
+                // 個人メッセージ（統一してlocalUserIdを使用）
+                if (winner === localUserId) {
                     setMessage(`🏆 バトル勝利！ +5pt`);
-                } else if (loser === userId) {
+                } else if (loser === localUserId) {
                     setMessage(`💀 バトル敗北... 次のターン行動不能`);
                 } else {
                     setMessage(`⚔️ バトル終了: ${winnerName}の勝利`);
                 }
             } else {
                 // 当事者に引き分け結果ポップアップを表示
-                if (battle.participants.includes(userId)) {
+                console.log("🤝 [Draw] Processing draw result display:", {
+                    participants: battle.participants.map(p => p.substring(0, 8)),
+                    localUserId: localUserId.substring(0, 8),
+                    actualUserId: userId.substring(0, 8),
+                    debugMode,
+                    isParticipant: battle.participants.includes(localUserId)
+                });
+                
+                if (battle.participants.includes(localUserId)) {
                     setShowBattleWaitingPopup(false); // 待機ポップアップを閉じる
                     setBattleResultData({
                         isWinner: false,
-                        myBet: player1 === userId ? player1Bet : player2Bet,
-                        opponentBet: player1 === userId ? player2Bet : player1Bet,
-                        opponentName: getUserNameById(player1 === userId ? player2 : player1),
+                        myBet: player1 === localUserId ? player1Bet : player2Bet,
+                        opponentBet: player1 === localUserId ? player2Bet : player1Bet,
+                        opponentName: getUserNameById(player1 === localUserId ? player2 : player1),
                         isDraw: true
                     });
                     setShowBattleResultPopup(true);
+                    console.log("🤝 [Draw] Showing draw popup for user:", localUserId.substring(0, 8));
                 }
                 
                 await sendSystemChatMessage(`🤝 バトル結果: 引き分け`);
@@ -1870,6 +1936,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 isParticipant,
                 modalOpen: isBattleModalOpen,
                 waitDialogOpen: showBattleWaitDialog,
+                queueLength: gameData.battleQueue?.length || 0,
                 debugMode
             });
             
@@ -1951,8 +2018,19 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 console.log("🥊 [Battle] Closing battle waiting popup - no active battle");
                 setShowBattleWaitingPopup(false);
             }
+            
+            // バトルキューをチェックして、待機中のバトルがあれば処理状況をログに出力
+            if (gameData?.battleQueue && gameData.battleQueue.length > 0) {
+                console.log("🥊 [BattleQueue] Battles waiting in queue:", {
+                    queueLength: gameData.battleQueue.length,
+                    waitingBattles: gameData.battleQueue.map(b => ({
+                        battleId: b.battleId,
+                        participants: b.participants.map(p => p.substring(0, 8))
+                    }))
+                });
+            }
         }
-    }, [gameData?.activeBattle, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen, showBattleWaitDialog, showBattleWaitingPopup, debugMode, effectiveUserId]);
+    }, [gameData?.activeBattle, gameData?.battleQueue, gameData?.playerStates, gameData?.mode, userId, isBattleModalOpen, showBattleWaitDialog, showBattleWaitingPopup, debugMode, effectiveUserId]);
 
     // ゲーム中断状態監視
     useEffect(() => {
@@ -1988,15 +2066,29 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
     // バトル勝利画面の自動閉じ機能
     useEffect(() => {
         if (showBattleVictoryScreen) {
+            console.log("🎉 [Victory] Victory screen is now visible, setting auto-close timer");
             const timer = setTimeout(() => {
+                console.log("🎉 [Victory] Auto-closing victory screen after 10 seconds");
                 setShowBattleVictoryScreen(false);
                 setVictoryScreenData(null);
-                console.log("🎉 [Victory] Victory screen auto-closed after 10 seconds");
             }, 10000); // 10秒後に自動閉じ
             
-            return () => clearTimeout(timer);
+            return () => {
+                console.log("🎉 [Victory] Clearing auto-close timer");
+                clearTimeout(timer);
+            };
         }
     }, [showBattleVictoryScreen]);
+
+    // バトル勝利画面の状態監視（デバッグ用）
+    useEffect(() => {
+        console.log("🎉 [Victory] Victory screen state changed:", {
+            showBattleVictoryScreen,
+            hasVictoryScreenData: !!victoryScreenData,
+            victoryScreenData,
+            timestamp: new Date().toISOString()
+        });
+    }, [showBattleVictoryScreen, victoryScreenData]);
     
     // handleSendChatMessage関数の実装
     const handleSendChatMessage = async () => {
@@ -2877,7 +2969,14 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             )}
 
             {/* バトル勝利画面（豪華版） */}
-            {showBattleVictoryScreen && victoryScreenData && (
+            {showBattleVictoryScreen && victoryScreenData && (() => {
+                console.log("🎉 [Victory] Rendering battle victory screen:", {
+                    showBattleVictoryScreen,
+                    victoryScreenData,
+                    currentTime: new Date().toISOString()
+                });
+                return true;
+            })() && (
                 <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center z-50 p-4">
                     {/* 背景アニメーション - 輝く星々 */}
                     <div className="absolute inset-0 overflow-hidden">
