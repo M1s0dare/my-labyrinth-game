@@ -244,8 +244,8 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode, isOnline
     const updateMessage = (newWalls = myMazeWalls, newStart = startPos, newGoal = goalPos, gridSizeToUse = currentGridSize) => {
         const activeWallsCount = newWalls.filter(w => w.active).length;
         let msg = `壁: ${activeWallsCount}/${WALL_COUNT}本。`;
-        msg += newStart ? `S(${newStart.r},${newStart.c})。` : 'S未設定。';
-        msg += newGoal ? `G(${newGoal.r},${newGoal.c})。` : 'G未設定。';
+        msg += newStart ? `S(${newStart.c +1},${newStart.r +1})。` : 'S未設定。';
+        msg += newGoal ? `G(${newGoal.c +1},${newGoal.r +1})。` : 'G未設定。';
         if (newStart && newGoal && !isPathPossible(newStart, newGoal, newWalls, gridSizeToUse)) {
             msg += " <span class='text-red-500 font-semibold'>警告: SからGへの経路がありません！</span>";
         }
@@ -527,12 +527,6 @@ const CourseCreationScreen = ({ userId, setScreen, gameMode, debugMode, isOnline
                     (最終同期: {new Date(lastSyncTime).toLocaleTimeString()})
                 </span>
             </div>
-            
-            {gameType === 'extra' && creationTimeLeft !== null && 
-                <p className="text-lg font-semibold text-red-600 mb-2">
-                    <Clock size={20} className="inline mr-1"/> 残り時間: {formatTime(creationTimeLeft)}
-                </p>
-            }
             
             <div className={`bg-white p-6 rounded-lg shadow-xl mb-6 w-full ${currentGridSize > 6 ? 'max-w-2xl' : 'max-w-lg'}`}>
                 <div className="flex justify-center space-x-1 sm:space-x-2 mb-4">
