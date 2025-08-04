@@ -2386,16 +2386,23 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                         })()
                                                     }}
                                                     playerPosition={(() => {
-                                                        // 自分が作った迷路をプレイしている人の場合のみ位置を表示
-                                                        const playerState = gameData.playerStates?.[viewingMazeOwnerId];
-                                                        const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
-                                                        const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
-                                                        
-                                                        // 自分が作った迷路をプレイしている人、または自分自身の場合のみ位置表示
-                                                        return (isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId) 
-                                                            ? (gameData.playerStates?.[viewingMazeOwnerId]?.position || null)
-                                                            : null;
-                                                    })()} // 4人対戦時は基本的に他プレイヤーの位置を非表示
+                                                        // 四人対戦モードでは、プレイヤーの位置情報を完全に非表示
+                                                        if (gameData?.mode === '4player') {
+                                                            // 自分自身の場合のみ位置を表示
+                                                            return viewingMazeOwnerId === effectiveUserId
+                                                                ? (gameData.playerStates?.[viewingMazeOwnerId]?.position || null)
+                                                                : null;
+                                                        } else {
+                                                            // 二人対戦モードでは従来通り
+                                                            const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                            const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                            const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
+                                                            
+                                                            return (isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId) 
+                                                                ? (gameData.playerStates?.[viewingMazeOwnerId]?.position || null)
+                                                                : null;
+                                                        }
+                                                    })()} // 4人対戦時は相手の位置情報を完全に非表示（自分が作った迷路でも）
                                                     otherPlayers={[]} // 右側の迷路では他プレイヤーの現在地を表示しない
                                                     showAllWalls={(() => {
                                                         const playerState = gameData.playerStates?.[viewingMazeOwnerId];
@@ -2406,12 +2413,18 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                     gridSize={currentGridSize}
                                                     sharedWalls={[]}
                                                     highlightPlayer={(() => {
-                                                        // 自分が作った迷路をプレイしている人の場合のみハイライト
-                                                        const playerState = gameData.playerStates?.[viewingMazeOwnerId];
-                                                        const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
-                                                        const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
-                                                        
-                                                        return isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId;
+                                                        // 四人対戦モードでは、プレイヤーのハイライトを完全に非表示
+                                                        if (gameData?.mode === '4player') {
+                                                            // 自分自身の場合のみハイライト
+                                                            return viewingMazeOwnerId === effectiveUserId;
+                                                        } else {
+                                                            // 二人対戦モードでは従来通り
+                                                            const playerState = gameData.playerStates?.[viewingMazeOwnerId];
+                                                            const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
+                                                            const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
+                                                            
+                                                            return isPlayingMyMaze || viewingMazeOwnerId === effectiveUserId;
+                                                        }
                                                     })()}
                                                     smallView={false}
                                                     revealedCells={gameData.playerStates?.[viewingMazeOwnerId]?.revealedCells || {}}
@@ -2429,12 +2442,24 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                                 const assignedMazeOwnerId = playerState?.assignedMazeOwnerId;
                                                 const isPlayingMyMaze = assignedMazeOwnerId === effectiveUserId;
                                                 
-                                                if (viewingMazeOwnerId === effectiveUserId) {
-                                                    return <p className="text-blue-600">あなたの探索状況と発見した壁が表示されています</p>;
-                                                } else if (isPlayingMyMaze) {
-                                                    return <p className="text-blue-600">あなたが作った迷路をプレイ中です（全ての壁が見えます）</p>;
+                                                if (gameData?.mode === '4player') {
+                                                    // 四人対戦モードの説明
+                                                    if (viewingMazeOwnerId === effectiveUserId) {
+                                                        return <p className="text-blue-600">あなたの探索状況と発見した壁が表示されています</p>;
+                                                    } else if (isPlayingMyMaze) {
+                                                        return <p className="text-blue-600">あなたが作った迷路です（壁のみ表示、プレイヤー位置は非表示）</p>;
+                                                    } else {
+                                                        return <p className="text-blue-600">他プレイヤーの迷路です（スタート・ゴールのみ表示、位置・壁は非表示）</p>;
+                                                    }
                                                 } else {
-                                                    return <p className="text-blue-600">他プレイヤーの現在位置とスタート・ゴールが表示されています（壁は非表示）</p>;
+                                                    // 二人対戦モードの説明（従来通り）
+                                                    if (viewingMazeOwnerId === effectiveUserId) {
+                                                        return <p className="text-blue-600">あなたの探索状況と発見した壁が表示されています</p>;
+                                                    } else if (isPlayingMyMaze) {
+                                                        return <p className="text-blue-600">あなたが作った迷路をプレイ中です（全ての壁が見えます）</p>;
+                                                    } else {
+                                                        return <p className="text-blue-600">他プレイヤーの現在位置とスタート・ゴールが表示されています（壁は非表示）</p>;
+                                                    }
                                                 }
                                             })()}
                                         </div>
