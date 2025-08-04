@@ -477,9 +477,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                            ps.position.c === newC;
                 });
             
+            // 訪問したセルを記録（全モード共通）
+            if (isFirstVisit) {
+                updates[`playerStates.${operatingUserId}.revealedCells.${cellKey}`] = true;
+            }
+            
             if (gameData?.mode === '4player' && isFirstVisit) {
                 updates[`playerStates.${operatingUserId}.score`] = increment(1);
-                updates[`playerStates.${operatingUserId}.revealedCells.${cellKey}`] = true;
                 moveMessage = `(${newC +1},${newR +1})に移動！ +1pt (初回訪問)`;
                 
                 // 他プレイヤーがいる場合の追加情報
@@ -502,8 +506,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 });
             } else {
                 moveMessage = `(${newC +1},${newR +1})に移動しました。`;
-                if (gameData?.mode === '4player' && !isFirstVisit) {
+                if (!isFirstVisit) {
                     moveMessage += " (訪問済み)";
+                } else if (gameData?.mode === '2player') {
+                    moveMessage += " (初回訪問)";
                 }
                 
                 // 他プレイヤーがいる場合の追加情報
@@ -1654,9 +1660,13 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
             const revealedCells = myPlayerState?.revealedCells || {};
             const isFirstVisit = !revealedCells[cellKey];
             
+            // 訪問したセルを記録（全モード共通）
+            if (isFirstVisit) {
+                updates[`playerStates.${userId}.revealedCells.${cellKey}`] = true;
+            }
+            
             if (gameData?.mode === '4player' && isFirstVisit) {
                 updates[`playerStates.${userId}.score`] = increment(1);
-                updates[`playerStates.${userId}.revealedCells.${cellKey}`] = true;
                 setMessage(`(${newC +1},${newR +1})に移動！ +1pt (初回訪問)`);
                 console.log("🎯 [Points] First visit bonus awarded:", {
                     playerId: userId.substring(0, 8),
@@ -1666,8 +1676,10 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                 });
             } else {
                 let moveMsg = `(${newC +1},${newR +1})に移動しました。`;
-                if (gameData?.mode === '4player' && !isFirstVisit) {
+                if (!isFirstVisit) {
                     moveMsg += " (訪問済み)";
+                } else if (gameData?.mode === '2player') {
+                    moveMsg += " (初回訪問)";
                 }
                 setMessage(moveMsg);
                 console.log("🚶 [Points] No bonus - already visited or not 4-player mode:", {
@@ -2136,6 +2148,7 @@ const PlayScreen = ({ userId, setScreen, gameMode, debugMode }) => {
                                 <div className="mt-3 p-2 bg-blue-50 rounded text-sm">
                                     <p className="font-semibold text-blue-700">あなたの状態:</p>
                                     <p>位置: ({(effectivePlayerState?.position?.c || 0) + 1}, {(effectivePlayerState?.position?.r || 0) + 1})</p>
+                                    <p>到達マス数: {Object.keys(effectivePlayerState?.revealedCells || {}).length}マス</p>
                                     <p>ぶつかった壁: {(effectivePlayerState?.hitWalls || []).length}個</p>
                                     {/* <p>スコア: {effectivePlayerState?.score || 0}pt</p> */}
                                     {effectivePlayerState?.goalTime && (
